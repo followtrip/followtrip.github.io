@@ -1,165 +1,199 @@
-(() => {
-  const $ = (id) => document.getElementById(id);
+// 预约确认函生成器（纯前端）
+// 依赖：同目录 template.png
+// 输出：高清 PNG（1240×1800）
+// 目标：微信发图不糊、文字不乱码（使用系统字体 + 自动缩放）
 
-  const canvas = $("canvas");
-  const input = $("input");
-  const btnRender = $("btnRender");
-  const btnDownload = $("btnDownload");
+const CANVAS_W = 1240;
+const CANVAS_H = 1800;
 
-  if (!canvas) {
-    console.error("找不到 canvas#canvas，请检查 index.html 的 id 是否为 canvas");
+// 文字区域（你模板中间金框内的留白区）
+// 你之后如果换模板，只需要调整这里四个数：x,y,w,h
+const TEXT_BOX = {
+  x: 210,
+  y: 470,
+  w: 820,
+  h: 520,
+};
+
+const TITLE_Y = 200;  // 顶部标题大字位置（可按模板微调）
+
+const inputEl = document.getElementById("input");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const btnGenerate = document.getElementById("btnGenerate");
+const btnDownload = document.getElementById("btnDownload");
+
+canvas.width = CANVAS_W;
+canvas.height = CANVAS_H;
+
+let lastDataURL = null;
+
+const templateImg = new Image();
+templateImg.src = "./template.png";
+templateImg.onload = () => {
+  // 初始渲染空白模板
+  renderToCanvas("请在左侧粘贴预约信息，然后点击「生成图片」");
+};
+templateImg.onerror = () => {
+  alert("template.png 加载失败：请确认 reservation-maker 目录下存在 template.png，且文件名完全一致（区分大小写）");
+};
+
+btnGenerate.addEventListener("click", () => {
+  const text = (inputEl.value || "").trim();
+  if (!text) {
+    alert("请先粘贴预约信息");
     return;
   }
+  renderToCanvas(text);
+  btnDownload.disabled = false;
+});
 
-  const ctx = canvas.getContext("2d");
+btnDownload.addEventListener("click", () => {
+  if (!lastDataURL) return;
+  const a = document.createElement("a");
+  a.href = lastDataURL;
+  a.download = `预约确认函_${new Date().toISOString().slice(0,10)}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
 
-  // 你这张模板的尺寸（必须和 canvas 一致）
-  const W = 1240;
-  const H = 1754;
+// --------- 渲染核心 ---------
+function renderToCanvas(rawText) {
+  // 背景模板
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.drawImage(templateImg, 0, 0, CANVAS_W, CANVAS_H);
 
-  // ✅ 文字安全区（你要的：不顶框、上下留白均等）
-  const TEXT_BOX = { x: 210, y: 470, w: 820, h: 520 };
+  // 标题（如果你的模板已经包含标题，可把这段注释）
+  // drawTitle("餐厅预约确认函");
 
-  // ✅ GitHub Pages 子目录：必须用相对路径
-  const TEMPLATE_SRC = "./template.png";
+  // 主体文字：自动换行 + 自动缩放
+  drawAutoFitText(rawText, TEXT_BOX);
 
-  // 如有自带字体文件，可改为 ./fonts/xxx.otf
-  // 没有也没关系：先用系统字体（黑体/苹方/微软雅黑）
-  function setFont(sizePx) {
-    // 让不同系统尽量接近“黑体观感”
-    ctx.font = `700 ${sizePx}px "SimHei","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif`;
-    ctx.fillStyle = "#F2F2F2";
-    ctx.textBaseline = "top";
-  }
+  lastDataURL = canvas.toDataURL("image/png");
+}
 
-  function wrapTextToLines(text, maxWidth, fontSize) {
-    setFont(fontSize);
-    const lines = [];
-    const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
+// 可选：额外画标题（默认不画，避免跟模板重复）
+function drawTitle(t) {
+  ctx.save();
+  ctx.fillStyle = "#f2f2f2";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 78px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif`;
+  ctx.fillText(t, CANVAS_W / 2, TITLE_Y);
+  ctx.restore();
+}
 
-    for (const p of paragraphs) {
-      const s = p.trim();
-      if (!s) { lines.push(""); continue; }
+// 自动适配：在固定盒子里把文本塞进去（会缩小字体以防溢出）
+function drawAutoFitText(text, box) {
+  const padding = 18;
+  const maxW = box.w - padding * 2;
+  const maxH = box.h - padding * 2;
 
-      let line = "";
-      for (const ch of s) {
-        const test = line + ch;
-        const w = ctx.measureText(test).width;
-        if (w <= maxWidth) {
-          line = test;
-        } else {
-          if (line) lines.push(line);
-          line = ch;
-        }
+  // 预处理：统一冒号/空格；保留换行
+  const cleaned = text
+    .replace(/\r\n/g, "\n")
+    .replace(/[：]\s*/g, "：")
+    .replace(/\t/g, " ")
+    .trim();
+
+  // 字体从大到小试，直到能放进去
+  let fontSize = 44;
+  let lineHeight = 1.45;
+
+  ctx.save();
+  ctx.fillStyle = "#f3f3f4";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  while (fontSize >= 22) {
+    ctx.font = `600 ${fontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+    const lines = wrapTextByBox(cleaned, maxW, ctx);
+
+    const totalH = lines.length * fontSize * lineHeight;
+    if (totalH <= maxH) {
+      // 画出来
+      const startX = box.x + padding;
+      let y = box.y + padding;
+
+      for (const line of lines) {
+        ctx.fillText(line, startX, y);
+        y += fontSize * lineHeight;
       }
-      if (line) lines.push(line);
+      ctx.restore();
+      return;
     }
-    return lines;
+
+    fontSize -= 2;
   }
 
-  function calcBlockHeight(lines, fontSize, lineGap) {
-    // 行高：字号 * 1.25 + gap
-    const lineH = Math.round(fontSize * 1.25);
-    return lines.length * lineH + (lines.length - 1) * lineGap;
+  // 仍放不下：截断
+  ctx.font = `600 22px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif`;
+  const lines = wrapTextByBox(cleaned, maxW, ctx);
+  const maxLines = Math.floor(maxH / (22 * lineHeight));
+  const clipped = lines.slice(0, maxLines);
+  if (clipped.length > 0) {
+    clipped[clipped.length - 1] = clipped[clipped.length - 1].slice(0, Math.max(0, clipped[clipped.length - 1].length - 2)) + "…";
   }
 
-  async function loadImage(src) {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = src;
-    // 关键：等待 decode，避免“白屏但不报错”
-    await img.decode();
-    return img;
+  const startX = box.x + padding;
+  let y = box.y + padding;
+  for (const line of clipped) {
+    ctx.fillText(line, startX, y);
+    y += 22 * lineHeight;
   }
+  ctx.restore();
+}
 
-  function drawTextBlock(text) {
-    // 允许你直接整段粘贴
-    const raw = (text || "").trim();
-    if (!raw) return;
+// 把带换行的文本，按盒子宽度进行折行
+function wrapTextByBox(text, maxWidth, ctx) {
+  const paragraphs = text.split("\n");
+  const lines = [];
 
-    // 自动挑字号：从大到小，能放下为止
-    const maxSize = 48;
-    const minSize = 22;
-    const lineGap = 10;
+  for (const p of paragraphs) {
+    if (!p.trim()) {
+      lines.push(""); // 保留空行
+      continue;
+    }
+    const words = splitKeepChars(p);
+    let line = "";
 
-    let best = null;
-
-    for (let size = maxSize; size >= minSize; size--) {
-      const lines = wrapTextToLines(raw, TEXT_BOX.w, size);
-      const blockH = calcBlockHeight(lines, size, lineGap);
-
-      if (blockH <= TEXT_BOX.h) {
-        best = { size, lines, blockH };
-        break;
+    for (const w of words) {
+      const test = line ? (line + w) : w;
+      const width = ctx.measureText(test).width;
+      if (width <= maxWidth) {
+        line = test;
+      } else {
+        if (line) lines.push(line);
+        line = w.trimStart(); // 新行不需要前导空格
       }
     }
-
-    // 如果还放不下，就用最小字号并硬塞（也会在框内，但更密）
-    if (!best) {
-      const size = minSize;
-      const lines = wrapTextToLines(raw, TEXT_BOX.w, size);
-      const blockH = calcBlockHeight(lines, size, lineGap);
-      best = { size, lines, blockH };
-    }
-
-    const { size, lines, blockH } = best;
-    setFont(size);
-
-    // ✅ 垂直居中（上下留白相等）
-    let y = TEXT_BOX.y + Math.max(0, Math.floor((TEXT_BOX.h - blockH) / 2));
-    const lineH = Math.round(size * 1.25);
-
-    for (const line of lines) {
-      // 左对齐更像“正式函件”；如果你要整体居中，把 x 改成居中计算
-      const x = TEXT_BOX.x;
-      ctx.fillText(line, x, y);
-      y += lineH + lineGap;
-    }
+    if (line) lines.push(line);
   }
 
-  let lastBlobUrl = null;
+  return lines;
+}
 
-  async function render() {
-    try {
-      btnDownload.disabled = true;
+// 中文/日文不按空格分词，所以按“字符”拆，但保留英文单词整体
+function splitKeepChars(str) {
+  const out = [];
+  let buf = "";
 
-      // 1) 画模板
-      const bg = await loadImage(TEMPLATE_SRC);
-      ctx.clearRect(0, 0, W, H);
-      ctx.drawImage(bg, 0, 0, W, H);
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const isAsciiWord = /[A-Za-z0-9@._\-]/.test(ch);
 
-      // 2) 画文字
-      drawTextBlock(input.value);
-
-      // 3) 生成下载
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
-        lastBlobUrl = URL.createObjectURL(blob);
-        btnDownload.disabled = false;
-      }, "image/png", 1.0);
-
-    } catch (e) {
-      console.error("渲染失败：", e);
-      alert(
-        "预览生成失败：\n" +
-        "1) 检查 template.png 是否在 reservation-maker/ 下\n" +
-        "2) 检查路径是否为 ./template.png\n" +
-        "3) 打开控制台看是否 404 或字体/图片加载错误"
-      );
+    if (isAsciiWord) {
+      buf += ch;
+    } else {
+      if (buf) {
+        out.push(buf);
+        buf = "";
+      }
+      out.push(ch);
     }
   }
+  if (buf) out.push(buf);
 
-  btnRender.addEventListener("click", render);
-
-  btnDownload.addEventListener("click", () => {
-    if (!lastBlobUrl) return;
-    const a = document.createElement("a");
-    a.href = lastBlobUrl;
-    a.download = "预约确认函.png";
-    a.click();
-  });
-
-  // 进入页面先渲染一次（便于看预览是否正常）
-  render();
-})();
+  return out;
+}
