@@ -181,3 +181,124 @@ window.addEventListener("DOMContentLoaded", () => {
     return out;
   }
 });
+function drawTwoColumnText(text, leftBox, rightBox) {
+  // 预处理：保持换行
+  const cleaned = (text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\t/g, " ")
+    .trim();
+
+  // 样式：左栏大一点，右栏小一点
+  const leftStyle = {
+    minSize: 30,
+    maxSize: 40,
+    weight: 700,
+    lineHeight: 1.38,
+    padding: 18,
+  };
+
+  const rightStyle = {
+    minSize: 22,
+    maxSize: 30,
+    weight: 650,
+    lineHeight: 1.36,
+    padding: 18,
+  };
+
+  ctx.save();
+  ctx.fillStyle = "#f3f3f4";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  // 先把全文按“左栏宽度”折行（保证左右一致的换行逻辑）
+  // 左栏折行会更保守（宽度更小），这样溢出到右栏也不会突然变成更长的行
+  const leftMaxW = leftBox.w - leftStyle.padding * 2;
+
+  // 左栏字体：从大到小找一个“尽量大但能放下更多”的字号
+  // 这里不追求全放下，因为我们有右栏；目标是：左栏读起来舒服
+  let leftFontSize = leftStyle.maxSize;
+  let leftLines = [];
+
+  while (leftFontSize >= leftStyle.minSize) {
+    ctx.font = `${leftStyle.weight} ${leftFontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+    leftLines = wrapTextByBox(cleaned, leftMaxW, ctx);
+
+    // 计算左栏能放多少行
+    const leftMaxH = leftBox.h - leftStyle.padding * 2;
+    const leftMaxLines = Math.floor(leftMaxH / (leftFontSize * leftStyle.lineHeight));
+
+    // 只要能放下至少 6 行（一般关键字段就够了），就接受这个字号
+    // 你也可以把 6 改成 7/8，看你常见字段多少
+    if (leftMaxLines >= 6) break;
+
+    leftFontSize -= 2;
+  }
+
+  // 左栏可容纳行数
+  const leftMaxH = leftBox.h - leftStyle.padding * 2;
+  const leftMaxLines = Math.floor(leftMaxH / (leftFontSize * leftStyle.lineHeight));
+
+  const leftToDraw = leftLines.slice(0, leftMaxLines);
+  const overflowLines = leftLines.slice(leftMaxLines);
+
+  // ——画左栏（垂直居中：上下留白相等）——
+  const leftTotalH = leftToDraw.length * leftFontSize * leftStyle.lineHeight;
+  const leftStartY =
+    leftBox.y + leftStyle.padding + Math.max(0, (leftMaxH - leftTotalH) / 2);
+
+  let y = leftStartY;
+  const leftStartX = leftBox.x + leftStyle.padding;
+
+  ctx.font = `${leftStyle.weight} ${leftFontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+  for (const line of leftToDraw) {
+    ctx.fillText(line, leftStartX, y);
+    y += leftFontSize * leftStyle.lineHeight;
+  }
+
+  // ——画右栏（溢出内容）——
+  const rightMaxW = rightBox.w - rightStyle.padding * 2;
+  const rightMaxH = rightBox.h - rightStyle.padding * 2;
+
+  // 右栏字体从大到小，直到能放下尽量多
+  let rightFontSize = rightStyle.maxSize;
+  let rightLines = [];
+
+  // 把 overflowLines 合并成文本再按右栏宽度重新折行（避免右栏宽度不同导致布局怪）
+  const overflowText = overflowLines.join("\n");
+
+  while (rightFontSize >= rightStyle.minSize) {
+    ctx.font = `${rightStyle.weight} ${rightFontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+    rightLines = wrapTextByBox(overflowText, rightMaxW, ctx);
+
+    const totalH = rightLines.length * rightFontSize * rightStyle.lineHeight;
+    if (totalH <= rightMaxH) break;
+
+    rightFontSize -= 2;
+  }
+
+  // 如果还是超出：截断并加省略号
+  const rightMaxLines = Math.floor(rightMaxH / (rightFontSize * rightStyle.lineHeight));
+  let rightToDraw = rightLines.slice(0, rightMaxLines);
+
+  if (rightLines.length > rightMaxLines && rightToDraw.length) {
+    const last = rightToDraw[rightToDraw.length - 1];
+    rightToDraw[rightToDraw.length - 1] =
+      last.length > 2 ? last.slice(0, last.length - 2) + "…" : "…";
+  }
+
+  // 右栏垂直居中
+  const rightTotalH = rightToDraw.length * rightFontSize * rightStyle.lineHeight;
+  const rightStartY =
+    rightBox.y + rightStyle.padding + Math.max(0, (rightMaxH - rightTotalH) / 2);
+
+  y = rightStartY;
+  const rightStartX = rightBox.x + rightStyle.padding;
+
+  ctx.font = `${rightStyle.weight} ${rightFontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+  for (const line of rightToDraw) {
+    ctx.fillText(line, rightStartX, y);
+    y += rightFontSize * rightStyle.lineHeight;
+  }
+
+  ctx.restore();
+}
