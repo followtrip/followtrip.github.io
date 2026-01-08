@@ -8,11 +8,11 @@
 // 3) 自动换行：中日混排不乱码（依赖系统字体）
 // 4) 自动缩放：核心信息区域会适度缩小，但不会小到不可读
 
-const CANVAS_W = 1240;
-const CANVAS_H = 1800;
+const CANVAS_W = 1455;
+const CANVAS_H = 2192;
 
 // 你现在的新模板内层金框（按 1240×1800 换算后的可写区）
-const TEXT_BOX = { x: 98, y: 477, w: 1035, h: 909 };
+const TEXT_BOX = { x: 98, y: 477, w: 1235, h: 1050 };
 
 // 两栏：左栏放“核心字段”，右栏放“备注/溢出”
 const COL_GAP = 36;
@@ -44,12 +44,13 @@ canvas.height = CANVAS_H;
 let lastDataURL = null;
 
 const templateImg = new Image();
-templateImg.src = TEMPLATE_SRC;
+templateImg.src = "./template.png";
 
 templateImg.onload = () => {
+  // ✅关键：按 1455×2192 画进来
+  ctx.drawImage(templateImg, 0, 0, CANVAS_W, CANVAS_H);
   renderToCanvas("请在左侧粘贴预约信息，然后点击「生成图片」");
 };
-
 templateImg.onerror = () => {
   alert(
     `模板加载失败：${TEMPLATE_SRC}\n` +
