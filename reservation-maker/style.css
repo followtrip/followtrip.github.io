@@ -182,7 +182,7 @@ button{
 }
 
 /* 小屏适配：上下布局 */
-@media (max-width: 980px){
+@media (max-width: 720px){
   .wrap{ grid-template-columns: 1fr; }
   #input{ min-height: 320px; }
 }
