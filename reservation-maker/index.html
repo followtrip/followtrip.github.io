@@ -2,38 +2,55 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>预约确认函生成器</title>
-  <link rel="stylesheet" href="./style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>食客阿福｜预约确认函生成器</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
-  <div class="wrap">
-    <div class="left">
+  <div class="container">
+    <div class="header">
       <h1>预约确认函生成器</h1>
-      <p class="sub">粘贴预约信息 → 一键生成图片（适合微信发送，清晰不乱码）</p>
-
-      <label class="label">① 粘贴预约信息</label>
-      <textarea id="input" rows="16" placeholder="把预约信息粘贴到这里..."></textarea>
-
-      <div class="btns">
-        <button id="btnRender">生成图片</button>
-        <button id="btnDownload" disabled>下载 PNG</button>
-      </div>
-
-      <div class="tips">
-        ✅ 支持中日混排，自动换行<br/>
-        ✅ 文字会按区域自动缩放，防止溢出<br/>
-        ✅ 若预览空白：优先检查 template.png 路径与字体加载
-      </div>
+      <p>粘贴预约信息 → 一键生成图片（微信发送清晰不乱码）</p>
     </div>
 
-    <div class="right">
-      <h2>② 预览</h2>
-      <canvas id="canvas" width="1240" height="1754"></canvas>
+    <div class="wrap">
+      <!-- 左：输入 -->
+      <section class="panel">
+        <div class="panel-hd">
+          <span class="badge">1</span>
+          <h2>粘贴预约信息</h2>
+        </div>
+        <div class="panel-bd">
+          <textarea id="input" placeholder="把餐厅发来的预约信息直接粘贴到这里…"></textarea>
+
+          <div class="actions">
+            <button id="btnGenerate">生成图片</button>
+            <button id="btnDownload" disabled>下载 PNG</button>
+          </div>
+
+          <div class="help">
+            <div class="ok">✅ 支持中日混排，自动换行</div>
+            <div class="ok">✅ 文字自动缩放，防止溢出</div>
+            <div>⚠️ 若预览黑屏：请检查 template.png / app.js 是否 404</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右：预览 -->
+      <section class="panel">
+        <div class="panel-hd">
+          <span class="badge">2</span>
+          <h2>预览</h2>
+        </div>
+        <div class="panel-bd preview-wrap">
+          <!-- 给 canvas 一个容器，避免塌陷 -->
+          <canvas id="canvas" width="1240" height="1800"></canvas>
+        </div>
+      </section>
     </div>
   </div>
 
-  <!-- 关键：相对路径 -->
-  <script defer src="./app.js"></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
