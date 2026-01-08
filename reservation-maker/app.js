@@ -30,7 +30,7 @@ const RIGHT_COL = {
 };
 
 // 模板文件名：你用 template.jpeg 就写 jpeg；用 png 就改 png
-const TEMPLATE_SRC = "./template.jpeg";
+const TEMPLATE_SRC = "./template.png";
 
 const inputEl = document.getElementById("input");
 const canvas = document.getElementById("canvas");
