@@ -1,11 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>食客阿福｜预约确认生成器</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <h1>预约确认生成器</h1>
-  <p>如果你能看到这行字，说明 GitHub Pages 已成功运行。</p>
+  <div class="wrap">
+    <header class="header">
+      <h1>预约确认函生成器</h1>
+      <p class="sub">粘贴预约信息 → 一键生成图片（适合微信发送，清晰不乱码）</p>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>① 粘贴预约信息</h2>
+        <textarea id="input" placeholder="示例：
+予約ID：825492
+店舗名：青空（はるたか）
+住所：東京都中央区銀座8-3-1 銀座時傳ビル 6F
+電話番号：03-3573-1144
+日時：01月07日(水) 17:00
+人数：2人
+コース：おまかせ(55,000円)
+席：カウンター
+来店頻度：初回
+预约人：Jason Chen"></textarea>
+
+        <div class="row">
+          <button id="btnGenerate" class="btn primary">生成图片</button>
+          <button id="btnDownload" class="btn" disabled>下载 PNG</button>
+        </div>
+
+        <div class="tips">
+          <div>✅ 支持中日混排，自动换行</div>
+          <div>✅ 文字会按区域自动缩放，防止溢出</div>
+          <div>✅ 如出现空白/黑块：通常是字体未加载或文件路径不对</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>② 预览</h2>
+        <div class="preview">
+          <canvas id="canvas" width="1242" height="2208"></canvas>
+        </div>
+        <div class="small">建议模板图分辨率 ≥ 1242×2208（竖版更清晰）</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
 </body>
 </html>
