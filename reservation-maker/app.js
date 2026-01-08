@@ -8,13 +8,96 @@ const CANVAS_H = 2208;
 
 // 文字区域（你模板中间金框内的留白区）
 // 你之后如果换模板，只需要调整这里四个数：x,y,w,h
+// ====== 可调参数：文字框（适配你这张黑金模板） ======
 const TEXT_BOX = {
-  x: 170,
-  y: 540,
-  w: 902,
-  h: 820,
+  x: 125,
+  y: 470,
+  w: 612,
+  h: 430
 };
 
+// ====== 自动换行（按像素宽度 wrap） ======
+function wrapLines(ctx, text, maxWidth) {
+  const paras = String(text || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const lines = [];
+
+  for (const p of paras) {
+    // 对“没有空格的日文/中文”也能wrap：逐字推进
+    let line = "";
+    for (const ch of p) {
+      const test = line + ch;
+      if (ctx.measureText(test).width <= maxWidth) {
+        line = test;
+      } else {
+        if (line) lines.push(line);
+        line = ch;
+      }
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+// ====== 在框内：自动缩放字号 + 自动换行 + 上下居中 ======
+function drawFittedText(ctx, text, box, options = {}) {
+  const {
+    fontFamily = '"Noto Sans CJK", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", sans-serif',
+    fontWeight = 700,
+    color = "#F2F2F2",
+    maxFontSize = 46,
+    minFontSize = 22,
+    lineHeightRatio = 1.28,
+    align = "left" // 你要“居中”就传 "center"
+  } = options;
+
+  // 先用最大字号尝试，放不下就逐步减小字号
+  let fontSize = maxFontSize;
+  let lines = [];
+  let lineHeight = 0;
+  let totalH = 0;
+
+  while (fontSize >= minFontSize) {
+    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    lines = wrapLines(ctx, text, box.w);
+    lineHeight = Math.round(fontSize * lineHeightRatio);
+    totalH = lines.length * lineHeight;
+
+    if (totalH <= box.h) break; // 放得下
+    fontSize -= 1;
+  }
+
+  // 绘制
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.fillStyle = color;
+  ctx.textBaseline = "top";
+  ctx.textAlign = align;
+
+  // 上下居中：让整体段落在框内垂直居中
+  const startY = box.y + Math.max(0, (box.h - totalH) / 2);
+
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + i * lineHeight;
+
+    let x;
+    if (align === "center") x = box.x + box.w / 2;
+    else if (align === "right") x = box.x + box.w;
+    else x = box.x;
+
+    ctx.fillText(lines[i], x, y);
+  }
+}
+
+// ====== 你原来生成图片的函数里，画完模板图后，调用这段 ======
+// 示例：假设你已经 ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height)
+
+function renderReservationText(ctx, reservationText) {
+  drawFittedText(ctx, reservationText, TEXT_BOX, {
+    align: "center",        // 你说要居中
+    maxFontSize: 44,        // 可调：字更大/更小
+    minFontSize: 22,
+    lineHeightRatio: 1.25
+  });
+}
 const TITLE_Y = 270;  // 顶部标题大字位置（可按模板微调）
 
 const inputEl = document.getElementById("input");
