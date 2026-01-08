@@ -1,193 +1,114 @@
-/* =========================
-   Followtrip | Reservation Maker
-   黑金稳重 + 微信发图友好
-   ========================= */
+:root{
+  --bg:#0b0d10;
+  --panel:#11151b;
+  --panel2:#0f1318;
+  --border:rgba(255,255,255,.08);
+  --text:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.65);
+  --gold:#c9a86a;
+}
 
-/* 基础重置 */
-* { box-sizing: border-box; }
-html, body { height: 100%; }
+*{box-sizing:border-box}
+html,body{height:100%}
 body{
-  margin: 0;
-  color: rgba(255,255,255,0.92);
-  background:
-    radial-gradient(900px 500px at 20% 0%, rgba(255, 215, 140, 0.08), transparent 60%),
-    radial-gradient(900px 500px at 80% 10%, rgba(255, 215, 140, 0.06), transparent 65%),
-    linear-gradient(180deg, #07070a 0%, #0b0b10 45%, #07070a 100%);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  margin:0;
+  font-family: system-ui, -apple-system, "PingFang SC","Microsoft YaHei", sans-serif;
+  background: radial-gradient(1200px 700px at 15% 10%, rgba(201,168,106,.10), transparent 55%),
+              radial-gradient(900px 600px at 85% 20%, rgba(255,255,255,.06), transparent 60%),
+              var(--bg);
+  color:var(--text);
 }
 
-/* 页面容器 */
-.container{
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 28px 18px 40px;
-}
+.container{max-width:1200px;margin:0 auto;padding:28px 18px 40px}
+.header h1{margin:0 0 6px;font-size:34px;letter-spacing:.5px}
+.header p{margin:0;color:var(--muted)}
 
-/* 标题区（如果你 index.html 有 h1 / p，会自动变好看） */
-.header{
-  margin-bottom: 18px;
-}
-.header h1{
-  margin: 0 0 10px;
-  font-size: 34px;
-  letter-spacing: 0.5px;
-  font-weight: 800;
-}
-.header p{
-  margin: 0;
-  color: rgba(255,255,255,0.72);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-/* 主体：左右并列，移动端自动上下 */
 .wrap{
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 22px;
-  align-items: start;
+  margin-top:18px;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:18px;
+  align-items:start;
 }
 
-/* 卡片风格 */
 .panel{
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow: 0 20px 70px rgba(0,0,0,0.45);
+  background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 60%), var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
 }
 
-/* 卡片标题条 */
-.panel .panel-hd{
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.panel-hd{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+  background: var(--panel2);
+  border-bottom:1px solid var(--border);
 }
-.panel .panel-hd .badge{
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  color: #0b0b10;
-  background: linear-gradient(180deg, #f3d08b, #d9a85f);
+.badge{
+  width:26px;height:26px;border-radius:999px;
+  display:inline-flex;align-items:center;justify-content:center;
+  color:#0b0d10;background:var(--gold);font-weight:800;
 }
-.panel .panel-hd h2{
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: 0.3px;
-  font-weight: 800;
+.panel-hd h2{margin:0;font-size:18px}
+
+.panel-bd{padding:14px 16px}
+
+textarea#input{
+  width:100%;
+  min-height:360px;
+  resize:vertical;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:#0b0f14;
+  color:var(--text);
+  outline:none;
+  line-height:1.5;
+  font-size:15px;
 }
-.panel .panel-bd{
-  padding: 16px;
+textarea#input:focus{
+  border-color: rgba(201,168,106,.55);
+  box-shadow: 0 0 0 3px rgba(201,168,106,.12);
 }
 
-/* 输入框 */
-#input{
-  width: 100%;
-  min-height: 420px;
-  resize: vertical;
-  background: rgba(0,0,0,0.35);
-  color: rgba(255,255,255,0.92);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 14px;
-  padding: 14px 14px;
-  font-size: 15px;
-  line-height: 1.65;
-  outline: none;
-}
-#input::placeholder{
-  color: rgba(255,255,255,0.35);
-}
-#input:focus{
-  border-color: rgba(243, 208, 139, 0.55);
-  box-shadow: 0 0 0 4px rgba(243, 208, 139, 0.12);
-}
-
-/* 按钮区 */
-.actions{
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-
+.actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
 button{
-  appearance: none;
-  border: none;
-  cursor: pointer;
-  border-radius: 12px;
-  padding: 11px 14px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  font-size: 14px;
-  transition: transform .08s ease, box-shadow .2s ease, opacity .2s ease;
+  padding:10px 14px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:#141a22;
+  color:var(--text);
+  cursor:pointer;
+  font-weight:700;
 }
+button#btnGenerate{
+  border-color: rgba(201,168,106,.55);
+  background: linear-gradient(180deg, rgba(201,168,106,.22), rgba(201,168,106,.06)), #121821;
+}
+button:disabled{opacity:.45;cursor:not-allowed}
 
-/* 主按钮：黑金 */
-#btnGenerate{
-  background: linear-gradient(180deg, #f3d08b, #d9a85f);
-  color: #1a140b;
-  box-shadow: 0 10px 30px rgba(217,168,95,0.18);
-}
-#btnGenerate:hover{
-  box-shadow: 0 14px 40px rgba(217,168,95,0.25);
-}
-#btnGenerate:active{ transform: translateY(1px); }
+.help{margin-top:12px;color:var(--muted);font-size:13px;line-height:1.6}
+.help .ok{color:rgba(255,255,255,.75)}
 
-/* 次按钮 */
-#btnDownload{
-  background: rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.92);
-  border: 1px solid rgba(255,255,255,0.12);
-}
-#btnDownload:hover{
-  background: rgba(255,255,255,0.11);
-}
-#btnDownload:disabled{
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* 小提示列表（你页面里如果有 ul/li 或 p，统一柔和） */
-.help{
-  margin-top: 14px;
-  color: rgba(255,255,255,0.70);
-  font-size: 13px;
-  line-height: 1.7;
-}
-.help .ok{
-  color: rgba(180, 255, 210, 0.9);
-}
-
-/* 画布预览 */
-#canvas{
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.25);
-}
-
-/* 预览区滚动友好（如果你右侧有较长内容） */
 .preview-wrap{
-  display: grid;
-  gap: 14px;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
 }
 
-/* 小屏适配：上下布局 */
+canvas#canvas{
+  display:block;
+  width:100%;
+  max-width:520px;   /* 右侧预览不要太大，避免撑爆 */
+  height:auto;       /* 关键：不让它变成 0 高度 */
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: #000;  /* 即使没画出来也不会透明 */
+}
+
+/* 尽量保持并排，只有很窄才上下 */
 @media (max-width: 720px){
-  .wrap{ grid-template-columns: 1fr; }
-  #input{ min-height: 320px; }
-}
-
-/* 超小屏：按钮变全宽更好点 */
-@media (max-width: 420px){
-  .actions button{ width: 100%; }
+  .wrap{grid-template-columns:1fr}
+  canvas#canvas{max-width:100%}
 }
