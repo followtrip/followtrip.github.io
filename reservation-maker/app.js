@@ -68,58 +68,53 @@ function renderToCanvas(rawText) {
   // drawTitle("餐厅预约确认函");
 
   // 主体文字：自动换行 + 自动缩放
-  drawAutoFitText(rawText, TEXT_BOX);
-
-  lastDataURL = canvas.toDataURL("image/png");
-}
-
-// 可选：额外画标题（默认不画，避免跟模板重复）
-function drawTitle(t) {
-  ctx.save();
-  ctx.fillStyle = "#f2f2f2";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `700 78px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif`;
-  ctx.fillText(t, CANVAS_W / 2, TITLE_Y);
-  ctx.restore();
-}
-
-// 自动适配：在固定盒子里把文本塞进去（会缩小字体以防溢出）
+ // 自动适配：在固定盒子里把文本塞进去（自动换行 + 自动缩小 + 垂直居中）
 function drawAutoFitText(text, box) {
-  const padding = 18;
-  const maxW = box.w - padding * 2;
-  const maxH = box.h - padding * 2;
+  const paddingX = 34;     // 左右内边距（加大一点更“信件感”）
+  const paddingY = 32;     // 上下内边距（避免顶到金框）
+  const maxW = box.w - paddingX * 2;
+  const maxH = box.h - paddingY * 2;
 
-  // 预处理：统一冒号/空格；保留换行
-  const cleaned = text
+  const cleaned = (text || "")
     .replace(/\r\n/g, "\n")
     .replace(/[：]\s*/g, "：")
     .replace(/\t/g, " ")
     .trim();
-
-  // 字体从大到小试，直到能放进去
-  let fontSize = 44;
-  let lineHeight = 1.45;
 
   ctx.save();
   ctx.fillStyle = "#f3f3f4";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
+  // 1) 先试字号，从大到小，直到高度能放下
+  let fontSize = 44;
+  let lineHeightRatio = 1.45;
+
   while (fontSize >= 22) {
     ctx.font = `600 ${fontSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+
     const lines = wrapTextByBox(cleaned, maxW, ctx);
 
-    const totalH = lines.length * fontSize * lineHeight;
-    if (totalH <= maxH) {
-      // 画出来
-      const startX = box.x + padding;
-      let y = box.y + padding;
+    // 2) 行高：字越大行距略大，字越小行距略紧凑
+    lineHeightRatio = fontSize >= 38 ? 1.50 : (fontSize >= 30 ? 1.42 : 1.35);
+    const lineH = fontSize * lineHeightRatio;
 
-      for (const line of lines) {
+    // 去掉末尾空行造成的“假高度”
+    const trimmedLines = trimTrailingEmptyLines(lines);
+
+    const totalH = trimmedLines.length * lineH;
+
+    if (totalH <= maxH) {
+      // 3) 垂直居中：根据总高度算出起笔 y，让上下留白相等
+      const startX = box.x + paddingX;
+      const startY = box.y + paddingY + (maxH - totalH) / 2;
+
+      let y = startY;
+      for (const line of trimmedLines) {
         ctx.fillText(line, startX, y);
-        y += fontSize * lineHeight;
+        y += lineH;
       }
+
       ctx.restore();
       return;
     }
@@ -127,24 +122,42 @@ function drawAutoFitText(text, box) {
     fontSize -= 2;
   }
 
-  // 仍放不下：截断
-  ctx.font = `600 22px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif`;
-  const lines = wrapTextByBox(cleaned, maxW, ctx);
-  const maxLines = Math.floor(maxH / (22 * lineHeight));
+  // 4) 还放不下：截断
+  const fallbackSize = 22;
+  ctx.font = `600 ${fallbackSize}px "Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif`;
+  const lines = trimTrailingEmptyLines(wrapTextByBox(cleaned, maxW, ctx));
+
+  const lineH = fallbackSize * 1.35;
+  const maxLines = Math.max(1, Math.floor(maxH / lineH));
   const clipped = lines.slice(0, maxLines);
+
   if (clipped.length > 0) {
-    clipped[clipped.length - 1] = clipped[clipped.length - 1].slice(0, Math.max(0, clipped[clipped.length - 1].length - 2)) + "…";
+    clipped[clipped.length - 1] = smartEllipsis(clipped[clipped.length - 1]);
   }
 
-  const startX = box.x + padding;
-  let y = box.y + padding;
+  const totalH = clipped.length * lineH;
+  const startX = box.x + paddingX;
+  const startY = box.y + paddingY + (maxH - totalH) / 2;
+
+  let y = startY;
   for (const line of clipped) {
     ctx.fillText(line, startX, y);
-    y += 22 * lineHeight;
+    y += lineH;
   }
   ctx.restore();
 }
 
+function trimTrailingEmptyLines(lines) {
+  let end = lines.length;
+  while (end > 0 && (lines[end - 1] === "" || lines[end - 1].trim() === "")) end--;
+  return lines.slice(0, end);
+}
+
+function smartEllipsis(s) {
+  const t = (s || "").trimEnd();
+  if (t.length <= 2) return "…";
+  return t.slice(0, t.length - 1) + "…";
+}
 // 把带换行的文本，按盒子宽度进行折行
 function wrapTextByBox(text, maxWidth, ctx) {
   const paragraphs = text.split("\n");
