@@ -1,13 +1,10 @@
-// =====================================================
-// 预约确认函生成器（字段提取 + 两栏排版 + Icon 行）
-// ✅ 强化模板加载：自动计算真实 URL、decode、失败提示
-// ✅ 适配 template.png 原始尺寸（你的：1455×2192）
-// ✅ 店名永远居中 + 预约人单独列在店名下方
-// ✅ 日期/时间/人数 做成 icon 行（日式）
-// ✅ 核心字段优先放左侧，过长的“非核心”自动下沉到右侧
-// =====================================================
-
-document.addEventListener("DOMContentLoaded", () => {
+// ====== 预约确认函生成器（字段提取 + 两栏排版 + Icon 行）======
+// 目录：reservation-maker/
+// 文件同目录：index.html / style.css / app.js / template.png
+// ✅ 新增：时间两行（日式）——主行“到店时间”，副行“～退店/结束时间”
+// ✅ 日期主行固定 YYYY/MM/DD，副行 (火)/Tue
+(() => {
+  // ---------- DOM ----------
   const inputEl = document.getElementById("input");
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d", { alpha: true });
@@ -15,71 +12,33 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnDownload = document.getElementById("btnDownload");
 
   let lastDataURL = null;
-  let templateImg = new Image();
   let TEMPLATE_READY = false;
 
-  // 按钮先锁住，避免模板未加载就生成导致黑屏
   btnGenerate.disabled = true;
   btnDownload.disabled = true;
 
-  // === 模板地址：用 document.baseURI 计算“真实路径”，避免相对路径踩坑 ===
-  const TEMPLATE_SRC = new URL("./template.png", document.baseURI).href;
-  console.log("[Template] loading:", TEMPLATE_SRC);
+  // ---------- Load template ----------
+  const templateImg = new Image();
+  templateImg.src = `./template.png?v=${Date.now()}`;
 
-  // 为了兼容某些浏览器的 toDataURL 安全限制（同源通常不需要，但开着更稳）
-  templateImg.crossOrigin = "anonymous";
-
-  templateImg.onload = async () => {
-    try {
-      // 尝试 decode（更稳定，避免 onload 但 decode 未完成）
-      if (templateImg.decode) await templateImg.decode();
-    } catch (e) {
-      // decode 失败不致命，继续
-      console.warn("[Template] decode warn:", e);
-    }
-
+  templateImg.onload = () => {
     TEMPLATE_READY = true;
 
-    // ✅ 用模板真实尺寸设置 canvas
-    canvas.width = templateImg.naturalWidth || templateImg.width;
-    canvas.height = templateImg.naturalHeight || templateImg.height;
+    canvas.width = templateImg.naturalWidth;
+    canvas.height = templateImg.naturalHeight;
 
     btnGenerate.disabled = false;
-
-    // 初始渲染：确认模板已能画出来
     renderToCanvas("请粘贴预约信息，然后点击「生成图片」");
   };
 
-  templateImg.onerror = async () => {
-    TEMPLATE_READY = false;
-
-    // 尝试 fetch 一下看是不是 404 / 403（GitHub Pages 很好判断）
-    let statusText = "";
-    try {
-      const r = await fetch(TEMPLATE_SRC, { cache: "no-store" });
-      statusText = `fetch: ${r.status} ${r.statusText}`;
-    } catch (e) {
-      statusText = `fetch error: ${String(e)}`;
-    }
-
-    alert(
-      "template.png 加载失败。\n\n" +
-      "请检查：\n" +
-      "1) 文件是否在 reservation-maker/ 目录\n" +
-      "2) 文件名是否严格为 template.png（区分大小写）\n" +
-      "3) 是否已 commit 并等待 Pages 刷新\n\n" +
-      `当前尝试加载的 URL：\n${TEMPLATE_SRC}\n\n` +
-      statusText
-    );
+  templateImg.onerror = () => {
+    alert("template.png 加载失败：请确认 app.js 与 template.png 在同一目录，且文件名大小写完全一致。");
   };
 
-  // 强制不走缓存（你改了图但页面还旧时很关键）
-  templateImg.src = TEMPLATE_SRC + `?v=${Date.now()}`;
-
-  // 生成
+  // ---------- Events ----------
   btnGenerate.addEventListener("click", () => {
     if (!TEMPLATE_READY) {
-      alert("模板还没加载好，请刷新页面后重试。");
+      alert("模板还没加载完成，请稍等 1 秒或刷新页面再试。");
       return;
     }
     const raw = (inputEl.value || "").trim();
@@ -91,7 +50,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnDownload.disabled = false;
   });
 
-  // 下载
   btnDownload.addEventListener("click", () => {
     if (!lastDataURL) return;
     const a = document.createElement("a");
@@ -103,27 +61,24 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =====================================================
-  // 布局（按你最新大留白模板做的“稳妥默认值”）
-  // 你只需要改这里四个比例：TEXT_AREA x/y/w/h
+  // Layout（微调：金框内区域）
   // =====================================================
   function getLayout() {
     const W = canvas.width;
     const H = canvas.height;
 
-    // 这是“金框内黑底可写区域”的估算（适配你最新留白更大的 template）
-    // 如果你发现文字靠边：增大 padding 或把 x/y 往里推
     const TEXT_AREA = {
-      x: Math.round(W * 0.10),
-      y: Math.round(H * 0.28),
-      w: Math.round(W * 0.80),
-      h: Math.round(H * 0.50),
+      x: Math.round(W * 0.11),
+      y: Math.round(H * 0.30),
+      w: Math.round(W * 0.78),
+      h: Math.round(H * 0.46),
     };
 
-    const padding = Math.round(Math.min(W, H) * 0.020); // ~28
+    const padding = Math.round(Math.min(W, H) * 0.018);
     const colGap = Math.round(padding * 1.2);
     const colW = Math.floor((TEXT_AREA.w - padding * 2 - colGap) / 2);
 
-    const headerH = Math.round((TEXT_AREA.h - padding * 2) * 0.30); // Header占比（店名/NO/预约人）
+    const headerH = Math.round((TEXT_AREA.h - padding * 2) * 0.30);
 
     const headerBox = {
       x: TEXT_AREA.x + padding,
@@ -132,36 +87,31 @@ document.addEventListener("DOMContentLoaded", () => {
       h: headerH,
     };
 
-    const bodyY = headerBox.y + headerBox.h;
-    const bodyH = TEXT_AREA.h - padding * 2 - headerH;
-
     const leftBody = {
       x: TEXT_AREA.x + padding,
-      y: bodyY,
+      y: headerBox.y + headerBox.h,
       w: colW,
-      h: bodyH,
+      h: (TEXT_AREA.h - padding * 2) - headerH,
     };
 
     const rightBody = {
       x: leftBody.x + colW + colGap,
-      y: bodyY,
+      y: leftBody.y,
       w: colW,
-      h: bodyH,
+      h: leftBody.h,
     };
 
-    return { W, H, TEXT_AREA, padding, headerBox, leftBody, rightBody };
+    return { W, H, padding, headerBox, leftBody, rightBody };
   }
 
   // =====================================================
-  // 渲染入口
+  // Render
   // =====================================================
   function renderToCanvas(rawText) {
-    if (!TEMPLATE_READY) return;
-
     const W = canvas.width;
     const H = canvas.height;
-
     ctx.clearRect(0, 0, W, H);
+
     ctx.drawImage(templateImg, 0, 0, W, H);
 
     const fields = extractFields(rawText);
@@ -171,175 +121,212 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =====================================================
-  // 绘制：Header居中 + icon行 + 两栏
+  // Draw Card（核心）
   // =====================================================
   function drawReservationCard(f) {
     const { headerBox, leftBody, rightBody, padding } = getLayout();
 
     const GOLD = "#d7b46a";
     const WHITE = "#f3f3f4";
-    const MUTED = "rgba(243,243,244,0.78)";
+    const MUTED = "rgba(243,243,244,0.82)";
 
-    const familySans = `"PingFang SC","Hiragino Sans","Microsoft YaHei","Noto Sans CJK SC","Noto Sans CJK JP",sans-serif`;
-    const familySerif = `"Times New Roman","Songti SC","STSong","Noto Serif SC","Noto Serif JP",serif`;
+    const SANS = `"SimHei","PingFang SC","Hiragino Sans","Noto Sans CJK JP","Noto Sans CJK SC",sans-serif`;
+    const SERIF = `"SimHei","Noto Serif JP","Noto Serif SC","Times New Roman",serif`;
 
     ctx.save();
     ctx.textBaseline = "top";
     ctx.textAlign = "center";
 
-    // ---------- Header（店名/NO/预约人） ----------
-    const restaurant = f.restaurant || "（未识别店名）";
-    const guest = f.guest || "（未识别预约人）";
-    const rid = f.rid ? `NO. ${f.rid}` : "";
+    // ---------- Header ----------
+    const restaurant = (f.restaurant || "（未识别店名）").trim();
+    const guest = (f.guest || "（未识别预约人）").trim();
+    const rid = (f.rid || "").trim();
+    const ridLine = rid ? `NO. ${rid}` : "";
 
-    // 店名：自动适配单行
-    const nameMax = Math.round(headerBox.h * 0.36);
+    const nameMax = Math.round(headerBox.h * 0.34);
     const nameMin = 30;
-    const nameFont = fitSingleLineFont(restaurant, headerBox.w, nameMax, nameMin, 800, familySerif);
+    const nameFont = fitSingleLineFont(restaurant, headerBox.w, nameMax, nameMin, 800, SERIF);
 
-    // NO 和 预约人字号
-    const ridFont = Math.max(22, Math.round(nameFont * 0.55));
-    const guestFont = Math.max(24, Math.round(nameFont * 0.62));
+    const ridFont = Math.max(20, Math.round(nameFont * 0.55));
+    const guestFont = Math.max(22, Math.round(nameFont * 0.62));
 
-    const gap = Math.max(10, Math.round(padding * 0.35));
-    const totalH =
-      nameFont +
-      gap +
-      (rid ? ridFont + gap : 0) +
-      guestFont;
+    const lineGap = Math.round(padding * 0.45);
+    const totalH = nameFont + lineGap + (ridLine ? ridFont + lineGap : 0) + guestFont;
 
     let y = headerBox.y + Math.max(0, Math.floor((headerBox.h - totalH) / 2));
 
-    // 店名（居中）
     ctx.fillStyle = WHITE;
-    ctx.font = `800 ${nameFont}px ${familySerif}`;
+    ctx.font = `800 ${nameFont}px ${SERIF}`;
     ctx.fillText(restaurant, headerBox.x + headerBox.w / 2, y);
-    y += nameFont + gap;
+    y += nameFont + lineGap;
 
-    // 预约号（居中，金色）
-    if (rid) {
+    if (ridLine) {
       ctx.fillStyle = GOLD;
-      ctx.font = `800 ${ridFont}px ${familySans}`;
-      ctx.fillText(rid, headerBox.x + headerBox.w / 2, y);
-      y += ridFont + gap;
+      ctx.font = `900 ${ridFont}px ${SANS}`;
+      ctx.fillText(ridLine, headerBox.x + headerBox.w / 2, y);
+      y += ridFont + lineGap;
     }
 
-    // 预约人（单独列出，放店名下方）
     ctx.fillStyle = WHITE;
-    ctx.font = `800 ${guestFont}px ${familySans}`;
+    ctx.font = `800 ${guestFont}px ${SANS}`;
     ctx.fillText(guest, headerBox.x + headerBox.w / 2, y);
 
-    // ---------- Left：icon 行 + 核心字段 ----------
-    const iconH = Math.max(90, Math.round(leftBody.h * 0.24));
-    const iconBox = { x: leftBody.x, y: leftBody.y, w: leftBody.w, h: iconH };
-    drawIconRow({
-      box: iconBox,
-      GOLD,
-      WHITE,
-      family: familySans,
-      dateText: smartDate(f.dateRaw),
-      timeText: smartTime(f.timeRaw),
-      peopleText: smartPeople(f.peopleRaw),
-    });
-
-    const leftMainBox = {
+    // ---------- Left Body ----------
+    const iconRowH = Math.round(leftBody.h * 0.28);
+    const iconBox = { x: leftBody.x, y: leftBody.y, w: leftBody.w, h: iconRowH };
+    const mainLeftBox = {
       x: leftBody.x,
-      y: leftBody.y + iconH,
+      y: leftBody.y + iconRowH,
       w: leftBody.w,
-      h: leftBody.h - iconH,
+      h: leftBody.h - iconRowH,
     };
 
-    // 核心：地址/电话/套餐/金额（但避免太长挤爆）
-    const leftLines = [];
+    drawIconRow({
+      box: iconBox,
+      dateParts: smartDateParts(f.dateRaw),
+      timeParts: smartTimeParts(f.timeRaw),
+      peopleText: smartPeople(f.peopleRaw),
+      GOLD,
+      WHITE,
+      family: SANS,
+    });
 
-    if (f.address) leftLines.push(`地址：${limitText(f.address, 120)}`);
+    const leftLines = [];
+    if (f.address) leftLines.push(`地址：${f.address}`);
     if (f.phone && f.phone.toLowerCase() !== "na") leftLines.push(`电话：${f.phone}`);
-    if (f.course) leftLines.push(`套餐：${limitText(f.course, 90)}`);
+    if (f.course) leftLines.push(`套餐：${f.course}`);
     if (f.price) leftLines.push(`金额：${f.price}`);
 
     drawParagraphAutoFit({
       text: leftLines.join("\n") || " ",
-      box: leftMainBox,
+      box: mainLeftBox,
       color: WHITE,
-      fontFamily: familySans,
-      fontWeight: 700,
-      maxFont: 30,
-      minFont: 20,
-      lineHeight: 1.55,
+      fontFamily: SANS,
+      fontWeight: 750,
+      maxFont: 34,
+      minFont: 22,
+      lineHeight: 1.45,
       align: "left",
-      vAlign: "top",
     });
 
-    // ---------- Right：非核心/长文本下沉 ----------
+    // ---------- Right Body ----------
     const extra = (f.extra || "").trim();
-    const rightText = extra ? `补充信息：\n${extra}` : " ";
-
     drawParagraphAutoFit({
-      text: rightText,
+      text: extra ? `补充信息：\n${extra}` : " ",
       box: rightBody,
       color: MUTED,
-      fontFamily: familySans,
+      fontFamily: SANS,
       fontWeight: 650,
-      maxFont: 24,
+      maxFont: 26,
       minFont: 18,
-      lineHeight: 1.6,
+      lineHeight: 1.55,
       align: "left",
-      vAlign: "top",
     });
 
     ctx.restore();
   }
 
   // =====================================================
-  // Icon 行（日期/时间/人数）
+  // Icon Row（日期/时间/人数）— 日期两行；时间两行（日式）
   // =====================================================
-  function drawIconRow({ box, GOLD, WHITE, family, dateText, timeText, peopleText }) {
-    const pad = Math.round(Math.min(box.w, box.h) * 0.12);
+  function drawIconRow({ box, dateParts, timeParts, peopleText, GOLD, WHITE, family }) {
     const segW = Math.floor(box.w / 3);
 
-    const labelFont = 20;
-    const valueMax = 30;
-
-    // 细分割线
+    // 淡横线
     ctx.save();
-    ctx.strokeStyle = "rgba(215,180,106,0.25)";
+    ctx.strokeStyle = "rgba(215,180,106,0.20)";
     ctx.lineWidth = 2;
+    const midY = box.y + Math.floor(box.h * 0.56);
     ctx.beginPath();
-    ctx.moveTo(box.x, box.y + Math.floor(box.h * 0.65));
-    ctx.lineTo(box.x + box.w, box.y + Math.floor(box.h * 0.65));
+    ctx.moveTo(box.x, midY);
+    ctx.lineTo(box.x + box.w, midY);
     ctx.stroke();
     ctx.restore();
 
-    drawIconSegment(box.x + 0 * segW, box.y, segW, box.h, "calendar", "日期", dateText || "—");
-    drawIconSegment(box.x + 1 * segW, box.y, segW, box.h, "clock", "时间", timeText || "—");
-    drawIconSegment(box.x + 2 * segW, box.y, segW, box.h, "people", "人数", peopleText || "—");
+    drawIconSegmentTwoLine({
+      x: box.x + 0 * segW,
+      y: box.y,
+      w: segW,
+      h: box.h,
+      icon: "calendar",
+      label: "日期",
+      main: (dateParts?.main || "—"),
+      sub: (dateParts?.sub || ""),
+      GOLD,
+      WHITE,
+      family,
+      mainMax: 30,
+    });
 
-    function drawIconSegment(x, y, w, h, icon, label, value) {
-      const iconSize = Math.round(Math.min(w, h) * 0.22);
-      const ix = x + Math.round(w * 0.10);
-      const iy = y + Math.round(h * 0.22);
+    drawIconSegmentTwoLine({
+      x: box.x + 1 * segW,
+      y: box.y,
+      w: segW,
+      h: box.h,
+      icon: "clock",
+      label: "时间",
+      main: (timeParts?.main || "—"),
+      sub: (timeParts?.sub || ""),
+      GOLD,
+      WHITE,
+      family,
+      mainMax: 32,
+    });
 
-      drawSimpleIcon(icon, ix, iy, iconSize, GOLD);
+    drawIconSegmentTwoLine({
+      x: box.x + 2 * segW,
+      y: box.y,
+      w: segW,
+      h: box.h,
+      icon: "people",
+      label: "人数",
+      main: peopleText || "—",
+      sub: "",
+      GOLD,
+      WHITE,
+      family,
+      mainMax: 34,
+    });
+  }
 
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
+  function drawIconSegmentTwoLine({ x, y, w, h, icon, label, main, sub, GOLD, WHITE, family, mainMax }) {
+    const iconSize = Math.round(Math.min(w, h) * 0.22);
+    const iconX = x + Math.round(w * 0.10);
+    const iconY = y + Math.round(h * 0.30);
 
-      ctx.fillStyle = GOLD;
-      ctx.font = `800 ${labelFont}px ${family}`;
-      ctx.fillText(label, ix + iconSize + 12, iy - 2);
+    drawSimpleIcon(icon, iconX, iconY, iconSize, GOLD);
 
-      const maxW = w - (ix - x) - iconSize - 12 - Math.round(w * 0.08);
-      const vFont = fitSingleLineFont(value, maxW, valueMax, 18, 800, family);
+    // label
+    ctx.fillStyle = GOLD;
+    ctx.font = `900 20px ${family}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, iconX + iconSize + 12, iconY - 6);
 
-      ctx.fillStyle = WHITE;
-      ctx.font = `800 ${vFont}px ${family}`;
-      ctx.fillText(value, ix + iconSize + 12, iy + labelFont + 10);
+    const maxW = w - (iconX - x) - iconSize - 12 - Math.round(w * 0.08);
+
+    // main
+    const mainFont = fitSingleLineFont(main, maxW, mainMax, 14, 900, family);
+    ctx.fillStyle = WHITE;
+    ctx.font = `900 ${mainFont}px ${family}`;
+    ctx.fillText(main, iconX + iconSize + 12, iconY + 18);
+
+    // sub
+    if (sub) {
+      const subFont = Math.max(12, Math.round(mainFont * 0.55));
+      ctx.fillStyle = "rgba(243,243,244,0.82)";
+      ctx.font = `800 ${subFont}px ${family}`;
+      ctx.fillText(sub, iconX + iconSize + 12, iconY + 18 + mainFont + 6);
     }
   }
 
+  // =====================================================
+  // Simple Icons
+  // =====================================================
   function drawSimpleIcon(type, x, y, s, color) {
     ctx.save();
     ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = Math.max(2, Math.floor(s * 0.08));
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -382,11 +369,12 @@ document.addEventListener("DOMContentLoaded", () => {
       ctx.lineTo(x + s * 0.66, y + s * 0.92);
       ctx.stroke();
     }
+
     ctx.restore();
   }
 
   // =====================================================
-  // 段落自动适配（换行 + 缩放 + 截断）
+  // Paragraph AutoFit
   // =====================================================
   function drawParagraphAutoFit({
     text,
@@ -397,13 +385,11 @@ document.addEventListener("DOMContentLoaded", () => {
     maxFont,
     minFont,
     lineHeight,
-    align,
-    vAlign
+    align
   }) {
+    const cleaned = normalize(text);
     const maxW = box.w;
     const maxH = box.h;
-
-    const cleaned = normalize(text);
 
     ctx.save();
     ctx.fillStyle = color;
@@ -411,7 +397,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.textBaseline = "top";
 
     let fontSize = maxFont;
-
     while (fontSize >= minFont) {
       ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
       const lines = wrapTextByBox(cleaned, maxW, ctx);
@@ -419,11 +404,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (totalH <= maxH) {
         let y = box.y;
-        if (vAlign === "center") y = box.y + (maxH - totalH) / 2;
-
-        let x = box.x;
         for (const line of lines) {
-          ctx.fillText(line, x, y);
+          ctx.fillText(line, box.x, y);
           y += fontSize * lineHeight;
         }
         ctx.restore();
@@ -432,25 +414,28 @@ document.addEventListener("DOMContentLoaded", () => {
       fontSize -= 2;
     }
 
-    // 仍放不下：截断
     ctx.font = `${fontWeight} ${minFont}px ${fontFamily}`;
     const lines = wrapTextByBox(cleaned, maxW, ctx);
-    const maxLines = Math.floor(maxH / (minFont * lineHeight));
-    const clipped = lines.slice(0, Math.max(1, maxLines));
-
-    clipped[clipped.length - 1] = clipWithEllipsis(clipped[clipped.length - 1]);
+    const maxLines = Math.max(1, Math.floor(maxH / (minFont * lineHeight)));
+    const clipped = lines.slice(0, maxLines);
+    if (clipped.length) clipped[clipped.length - 1] = clipWithEllipsis(clipped[clipped.length - 1]);
 
     let y = box.y;
-    let x = box.x;
     for (const line of clipped) {
-      ctx.fillText(line, x, y);
+      ctx.fillText(line, box.x, y);
       y += minFont * lineHeight;
     }
     ctx.restore();
   }
 
+  function clipWithEllipsis(line) {
+    if (!line) return "…";
+    if (line.length <= 2) return "…";
+    return line.slice(0, Math.max(0, line.length - 2)) + "…";
+  }
+
   function wrapTextByBox(text, maxWidth, ctx) {
-    const paragraphs = text.split("\n");
+    const paragraphs = String(text).split("\n");
     const lines = [];
 
     for (const p of paragraphs) {
@@ -460,7 +445,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const tokens = splitKeepWords(p);
       let line = "";
-
       for (const t of tokens) {
         const test = line ? line + t : t;
         if (ctx.measureText(test).width <= maxWidth) {
@@ -483,18 +467,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const isWord = /[A-Za-z0-9@._\-]/.test(ch);
       if (isWord) buf += ch;
       else {
-        if (buf) { out.push(buf); buf = ""; }
+        if (buf) out.push(buf), (buf = "");
         out.push(ch);
       }
     }
     if (buf) out.push(buf);
     return out;
-  }
-
-  function clipWithEllipsis(line) {
-    if (!line) return "…";
-    if (line.length <= 2) return "…";
-    return line.slice(0, Math.max(0, line.length - 2)) + "…";
   }
 
   function fitSingleLineFont(text, maxW, maxFont, minFont, weight, family) {
@@ -512,14 +490,103 @@ document.addEventListener("DOMContentLoaded", () => {
     return minFont;
   }
 
-  function limitText(s, maxLen) {
-    s = String(s || "").trim();
-    if (s.length <= maxLen) return s;
-    return s.slice(0, maxLen - 1) + "…";
+  // =====================================================
+  // 日期：主行 YYYY/MM/DD；副行 (火)/Tue
+  // =====================================================
+  function smartDateParts(input) {
+    if (!input) return { main: "—", sub: "" };
+    let s = String(input).trim().replace(/\s{2,}/g, " ");
+
+    let englishDow = "";
+    const mDow = s.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i);
+    if (mDow) englishDow = mDow[1].slice(0, 3);
+    s = s.replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+/i, "");
+
+    let y = "", m = "", d = "", jpDow = "";
+
+    // 2026年01月20日(火)
+    let m1 = s.match(/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日(?:\s*\(([^)]+)\))?/);
+    if (m1) {
+      y = m1[1]; m = m1[2]; d = m1[3]; jpDow = m1[4] || "";
+    } else {
+      // 2026-01-20 / 2026/01/20
+      let m2 = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if (m2) {
+        y = m2[1]; m = m2[2]; d = m2[3];
+      } else {
+        // February 10, 2026 / Feb 10, 2026
+        let m3 = s.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})/i);
+        if (m3) {
+          const mm = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+          const k = m3[1].slice(0,3).toLowerCase();
+          y = m3[3]; m = String(mm[k] || ""); d = m3[2];
+        }
+      }
+    }
+
+    const mm = m ? String(m).padStart(2, "0") : "";
+    const dd = d ? String(d).padStart(2, "0") : "";
+
+    const main = (y && mm && dd) ? `${y}/${mm}/${dd}` : (s.length > 12 ? s.slice(0, 12) : s);
+    const sub = jpDow ? `(${jpDow})` : (englishDow ? englishDow : "");
+    return { main, sub };
   }
 
   // =====================================================
-  // 字段提取（中/日/英）
+  // 时间：两行（日式）
+  // 主行：到店时间（18:00 / 8:30 PM）
+  // 副行：～退店/结束（～14:00 / ~10:00 PM）或 “入店〜退店”里的后半段
+  // =====================================================
+  function smartTimeParts(input) {
+    if (!input) return { main: "—", sub: "" };
+    let s = String(input).trim().replace(/\s{2,}/g, " ");
+
+    // 常见： "12:00 入店〜14:00 退店"
+    // 提取两个时间：start/end
+    const times = s.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/gi) || [];
+    if (times.length >= 2) {
+      const start = normalizeTimeToken(times[0]);
+      const end = normalizeTimeToken(times[1]);
+      return { main: start, sub: `～${end}` };
+    }
+
+    // 含波浪或 ~ ： "18:00～" / "18:00~20:00"
+    if (/[～~]/.test(s)) {
+      const parts = s.split(/[～~]/).map(t => t.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const start = normalizeTimeToken(parts[0]);
+        const end = normalizeTimeToken(parts[1].match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i)?.[1] || parts[1]);
+        return { main: start, sub: `～${end}` };
+      }
+      const start = normalizeTimeToken(parts[0] || s);
+      return { main: start, sub: "" };
+    }
+
+    // 单时间： "18:00" / "8:30 PM"
+    const single = s.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
+    if (single) return { main: normalizeTimeToken(single[1]), sub: "" };
+
+    // 兜底
+    return { main: s.length > 10 ? s.slice(0, 10) : s, sub: "" };
+  }
+
+  function normalizeTimeToken(t) {
+    if (!t) return "";
+    let s = String(t).trim().replace(/\s{2,}/g, " ");
+    // 18:00～ -> 18:00
+    s = s.replace(/[～~].*$/, "").trim();
+    return s;
+  }
+
+  function smartPeople(s) {
+    if (!s) return "";
+    const m = String(s).match(/\d{1,2}/);
+    if (m) return `${m[0]}名`;
+    return String(s).trim();
+  }
+
+  // =====================================================
+  // Field Extraction
   // =====================================================
   function extractFields(raw) {
     const text = normalize(raw);
@@ -528,61 +595,67 @@ document.addEventListener("DOMContentLoaded", () => {
     const get = (keys) => pickAfter(text, keys);
     const getLine = (re) => (match(text, re) || "");
 
-    // 预约号
     const rid =
-      get(["予約番号","予約ID","予約No","Reservation ID","Booking ID","Confirmation","Confirmation No","Confirmation #","No.","NO."]) ||
+      get([
+        "予約番号","予約ID","予約No","NO.","No.","NO：","No：",
+        "Reservation ID","Reservation No","Booking ID","Booking No","Confirmation","Confirmation No","Confirmation #"
+      ]) ||
       getLine(/(?:予約番号|予約ID|No\.?|NO\.?|Reservation\s*(?:ID|No)|Booking\s*(?:ID|No)|Confirmation(?:\s*(?:No|#))?)\s*[:：#]?\s*([A-Za-z0-9\-]+)/i);
 
-    // 店名
     const restaurant =
-      get(["店舗名","店名","レストラン","レストラン名","Restaurant","Restaurant Name","Venue"]) ||
+      get(["店舗名","店名","レストラン","レストラン名","店舗","お店","Restaurant","Restaurant Name","Venue"]) ||
       guessRestaurant(lines);
 
-    // 预约人（必须单独提取）
     const guest =
       get(["予約人","予約者","予約名","お名前","ご予約名","氏名","Reservation Name","Name","Guest","Guest Name","Booker"]) ||
       guessGuest(lines);
 
-    // 日期 / 时间 / 人数
     const dateRaw =
-      get(["日時","予約日時","予約日付","予約日","日付","Date","Reservation Date","Booking Date"]) ||
+      get(["日時","予約日時","予約日付","予約日","日付","来店日","Date","Reservation Date","Booking Date"]) ||
       getLine(/(?:Date|Reservation Date|Booking Date)\s*[:：]\s*([^\n]+)/i) ||
-      getLine(/(\d{4}年\d{1,2}月\d{1,2}日|(?:\d{1,2}月\d{1,2}日)|\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/);
+      getLine(/(\d{4}年\d{1,2}月\d{1,2}日(?:\([^)]+\))?|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|[A-Za-z]{3,9}\s+\d{1,2},\s*\d{4})/);
 
     const timeRaw =
       get(["時間","予約時間","来店時間","Time","Reservation Time","Booking Time"]) ||
-      getLine(/(?:Time|Reservation Time|Booking Time)\s*[:：]\s*([0-9]{1,2}:[0-9]{2}\s*(?:AM|PM)?)/i) ||
-      getLine(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i) ||
-      getLine(/(\d{1,2}:\d{2})/);
+      getLine(/(?:Time|Reservation Time|Booking Time)\s*[:：]\s*([^\n]+)/i) ||
+      getLine(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\s*[～~]\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?))?/i);
 
     const peopleRaw =
       get(["人数","予約人数","ご利用人数","Seats","Guests","Party Size","People"]) ||
       getLine(/(?:Seats|Guests|Party Size|People)\s*[:：]\s*(\d{1,2})/i) ||
       getLine(/(\d{1,2})\s*(?:名|人)/);
 
-    // 地址 / 电话
     const address =
-      get(["住所","所在地","Address","Location"]) ||
+      get(["住所","所在地","アドレス","Address","Venue Address","Location"]) ||
       guessAddress(lines);
 
     const phone =
-      get(["電話番号","電話","TEL","Tel","Phone","Telephone"]) ||
+      get(["電話番号","電話","TEL","Tel","Phone","Telephone","Contact"]) ||
       getLine(/(?:Phone|Telephone|TEL|Tel)\s*[:：]\s*([+()0-9\-\s]{6,})/i) ||
       getLine(/(\d{2,4}-\d{2,4}-\d{3,4})/);
 
-    // 套餐（尽量抓短字段）
     const course =
-      get(["コース名","コース","Course","Menu","Plan"]) || "";
+      get(["コース","コース名","コース料金","コース内容","Course","Menu","Package","Plan"]) || "";
 
-    // 金额
     const price =
-      get(["総額","合計","金額","Total Price","Total","Price"]) ||
+      get(["総額","合計","料金","金額","Total Price","Total","Price"]) ||
       getLine(/(?:Total\s*Price|Total|Price)\s*[:：]\s*([¥￥]\s?[\d,]+(?:\.\d+)?)/i) ||
       getLine(/([¥￥]\s?[\d,]+(?:\.\d+)?)/i) ||
       "";
 
-    // extra：尽量保留长说明（NO SHOW/服务费/注意事项等）
-    const extra = buildExtra(lines);
+    const usedKeys = [
+      "予約番号","予約id","reservation id","booking id","confirmation","no.",
+      "店舗名","店名","レストラン","restaurant","venue",
+      "予約人","予約者","予約名","reservation name","guest",
+      "日時","予約日時","date","time",
+      "人数","予約人数","seats","guests","party size",
+      "住所","address",
+      "電話番号","電話","phone","tel",
+      "コース","course","menu",
+      "total price","total","price","合計","総額","金額","料金"
+    ];
+    const extraLines = lines.filter(l => !usedKeys.some(k => l.toLowerCase().includes(k)));
+    const extra = extraLines.join("\n").trim();
 
     return {
       rid: (rid || "").trim(),
@@ -595,18 +668,11 @@ document.addEventListener("DOMContentLoaded", () => {
       phone: (phone || "").trim(),
       course: (course || "").trim(),
       price: (price || "").trim(),
-      extra: (extra || "").trim(),
+      extra
     };
   }
 
-  function buildExtra(lines) {
-    // 只过滤明显的 “key: value” 行，避免误删（比如 NO SHOW 含 no）
-    const dropKeyRe = /^(予約番号|予約ID|店舗名|店名|レストラン|Restaurant|Reservation\s*ID|Booking\s*ID|Confirmation|予約人|予約者|Reservation\s*Name|Name|Guest|日時|予約日時|Date|Time|人数|Seats|Guests|住所|Address|電話|Phone|TEL|コース名|コース|Course|Total\s*Price|Total|合計|総額)\s*[:：]/i;
-    const extraLines = lines.filter(l => !dropKeyRe.test(l));
-    return extraLines.join("\n");
-  }
-
-  // ---------------- helpers ----------------
+  // ---------- helpers ----------
   function normalize(s) {
     return String(s || "")
       .replace(/\r\n/g, "\n")
@@ -627,13 +693,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const m = text.match(re);
       if (m && m[1]) return m[1].trim();
     }
-    // key在一行，值在下一行
-    const arr = text.split("\n");
-    for (let i = 0; i < arr.length; i++) {
-      const line = arr[i].trim();
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       for (const k of keys) {
-        if (new RegExp(`^${escapeRe(k)}$`, "i").test(line)) {
-          const next = (arr[i + 1] || "").trim();
+        if (new RegExp(`^\\s*${escapeRe(k)}\\s*$`, "i").test(line)) {
+          const next = (lines[i + 1] || "").trim();
           if (next) return next;
         }
       }
@@ -646,61 +711,34 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function guessRestaurant(lines) {
+    for (const l of lines) {
+      if (/^Restaurant\s*[:：]/i.test(l)) return (l.split(/[:：]/)[1] || "").trim();
+    }
     const bad = /(Date|Time|Seats|Guests|住所|電話|Phone|Address|予約番号|予約ID|NO\.|No\.)/i;
     const cand = lines.find(l => l.length >= 2 && l.length <= 40 && !bad.test(l));
     return cand || "";
   }
 
   function guessGuest(lines) {
-    const cand1 = lines.find(l => /(様|先生|女士)/.test(l));
-    if (cand1) return cand1;
-    const cand2 = lines.find(l => /Reservation Name\s*[:：]/i.test(l));
-    if (cand2) return cand2.split(/[:：]/)[1]?.trim() || "";
-    return "";
+    for (const l of lines) {
+      if (/Reservation Name\s*[:：]/i.test(l)) return (l.split(/[:：]/)[1] || "").trim();
+    }
+    const cand = lines.find(l => /(様|さん|先生|女士|Guest|Name)/i.test(l));
+    return cand || "";
   }
 
   function guessAddress(lines) {
-    const cand = lines.find(l => /(〒|東京都|大阪府|京都府|Japan|Tokyo|Osaka|Kyoto|City|Chome|Meguro)/i.test(l));
+    const cand = lines.find(l => /(〒|東京都|大阪府|京都府|Japan|Tokyo|Osaka|Kyoto)/i.test(l));
     if (!cand) return "";
     const idx = lines.indexOf(cand);
     const next1 = lines[idx + 1] || "";
     const next2 = lines[idx + 2] || "";
-    const joinable = (s) => s && s.length <= 60 && !/(Phone|TEL|電話|Time|Date|Seats|Guests|予約)/i.test(s);
+    const joinable = (s) =>
+      s && s.length <= 60 && !/(Phone|TEL|電話|Time|Date|Seats|Guests|予約)/i.test(s);
+
     let addr = cand;
     if (joinable(next1)) addr += ` ${next1}`;
     if (joinable(next2)) addr += ` ${next2}`;
     return addr.trim();
   }
-
-  // 统一展示：日期/时间/人数
-  function smartDate(s) {
-    if (!s) return "";
-    s = String(s).trim();
-    s = s.replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+/i, "");
-    const map = {
-      January:"Jan", February:"Feb", March:"Mar", April:"Apr", May:"May", June:"Jun",
-      July:"Jul", August:"Aug", September:"Sep", October:"Oct", November:"Nov", December:"Dec"
-    };
-    for (const k in map) {
-      const re = new RegExp("\\b" + k + "\\b", "i");
-      if (re.test(s)) { s = s.replace(re, map[k]); break; }
-    }
-    // 日文“1月8日(木) 18:00～”中，如果误带了时间，剪掉
-    s = s.replace(/\s+\d{1,2}:\d{2}.*$/, "");
-    return s;
-  }
-
-  function smartTime(s) {
-    if (!s) return "";
-    s = String(s).trim();
-    s = s.replace(/[～~].*$/, "").trim();
-    return s;
-  }
-
-  function smartPeople(s) {
-    if (!s) return "";
-    const m = String(s).match(/\d{1,2}/);
-    if (m) return `${m[0]}名`;
-    return String(s).trim();
-  }
-});
+})();
