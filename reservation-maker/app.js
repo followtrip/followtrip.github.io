@@ -1,7 +1,7 @@
 (() => {
   const inputEl = document.getElementById("input");
   const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d"); // 兼容最稳
+  const ctx = canvas.getContext("2d"); // 最稳
   const btnGenerate = document.getElementById("btnGenerate");
   const btnDownload = document.getElementById("btnDownload");
 
@@ -11,7 +11,7 @@
   btnGenerate.disabled = true;
   btnDownload.disabled = true;
 
-  // ===== 模板加载（永不黑屏：失败就画错误信息）=====
+  // ===== 模板加载：永不黑屏（失败直接画错误）=====
   const templateImg = new Image();
   templateImg.src = `./template.png?v=${Date.now()}`;
 
@@ -27,7 +27,7 @@
     canvas.width = 1200;
     canvas.height = 800;
     drawError(
-      "template.png 加载失败\n\n请检查：\n1) 文件名必须是 template.png（大小写一致）\n2) 必须和 index.html/app.js 同目录\n3) GitHub Pages 可能缓存：Ctrl+Shift+R 强刷"
+      "template.png 加载失败\n\n请检查：\n1) 文件名必须是 template.png（大小写一致）\n2) 必须与 index.html/app.js 同目录\n3) GitHub Pages 缓存：Ctrl+Shift+R 强刷"
     );
   };
 
@@ -59,11 +59,12 @@
     ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
 
     const d = extractFields(raw);
+    const L = getLayout();
 
-    const layout = getLayout();
-    drawHeader(d, layout);
-    drawIconRow(d, layout);
-    drawBody(d, layout);
+    drawHeader(d, L);
+    drawIconRow(d, L);
+    drawBody(d, L);
+    drawExtra(d, L); // ✅ 备注/电话/频度/要望等放这里
 
     lastDataURL = canvas.toDataURL("image/png");
   }
@@ -75,7 +76,6 @@
     const W = canvas.width;
     const H = canvas.height;
 
-    // 金框内内容区（你现在这张模板更“留白”，用这个更稳）
     const box = {
       x: W * 0.14,
       y: H * 0.28,
@@ -103,13 +103,19 @@
         x: box.x,
         y: box.y + box.h * 0.50,
         w: box.w,
-        h: box.h * 0.42,
+        h: box.h * 0.26,
+      },
+      extra: {
+        x: box.x,
+        y: box.y + box.h * 0.78,
+        w: box.w,
+        h: box.h * 0.18,
       },
     };
   }
 
   // ======================
-  // Header：店名居中 / 预约人紧贴下方 / NO 作为金色小行（可选）
+  // Header：店名居中 / 预约人紧贴下方 / NO 金色小行
   // ======================
   function drawHeader(d, L) {
     const GOLD = "#d7b46a";
@@ -124,21 +130,34 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
 
-    // 店名：更日式（衬线更高级）
     let y = L.header.y;
-    const nameFont = fitFontOneLine(restaurant, L.header.w * 0.92, 66, 40, 700, `"Noto Serif JP","Noto Serif SC","Times New Roman",serif`);
+
+    const nameFont = fitFontOneLine(
+      restaurant,
+      L.header.w * 0.92,
+      66,
+      40,
+      700,
+      `"Noto Serif JP","Noto Serif SC","Times New Roman",serif`
+    );
     ctx.fillStyle = WHITE;
     ctx.font = `700 ${nameFont}px "Noto Serif JP","Noto Serif SC","Times New Roman",serif`;
     ctx.fillText(restaurant, centerX, y);
 
-    // 预约人：紧贴店名下方
-    y += nameFont + 10;
-    const guestFont = fitFontOneLine(guest, L.header.w * 0.85, 36, 24, 650, `"PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`);
+    // ✅ 预约人紧贴店名
+    y += nameFont + 8;
+    const guestFont = fitFontOneLine(
+      guest,
+      L.header.w * 0.85,
+      36,
+      24,
+      650,
+      `"PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`
+    );
     ctx.fillStyle = WHITE;
     ctx.font = `650 ${guestFont}px "PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`;
     ctx.fillText(guest, centerX, y);
 
-    // NO：金色小字（存在才画）
     if (rid) {
       y += guestFont + 10;
       ctx.fillStyle = GOLD;
@@ -150,7 +169,7 @@
   }
 
   // ======================
-  // 4格 Icon 行：日期/时间/人数/席位（席位更突出）
+  // 4格 Icon 行：日期/时间/人数/席位（席位突出）
   // ======================
   function drawIconRow(d, L) {
     const GOLD = "#d7b46a";
@@ -167,7 +186,6 @@
     const segW = L.iconRow.w / 4;
     const topY = L.iconRow.y;
 
-    // 淡金分隔线（更高级）
     ctx.save();
     ctx.strokeStyle = "rgba(215,180,106,0.22)";
     ctx.lineWidth = 2;
@@ -181,24 +199,22 @@
       const it = items[i];
       const x = L.iconRow.x + segW * i;
 
-      // icon（矢量画，不用emoji，更“日式”）
       const iconSize = Math.max(20, Math.floor(L.iconRow.h * 0.38));
       drawIcon(it.icon, x + 8, topY + 4, iconSize, GOLD);
 
-      // label
       ctx.save();
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
+
       ctx.fillStyle = MUTED;
       ctx.font = `700 20px "PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`;
       ctx.fillText(it.label, x + iconSize + 16, topY + 2);
 
-      // value：席位突出
       const maxW = segW - (iconSize + 30);
       const valueFont = fitFontOneLine(
         it.value,
         maxW,
-        it.highlight ? 36 : 32,
+        it.highlight ? 38 : 32,
         20,
         it.highlight ? 800 : 700,
         `"PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`
@@ -207,18 +223,20 @@
       ctx.fillStyle = WHITE;
       ctx.font = `${it.highlight ? 800 : 700} ${valueFont}px "PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`;
       ctx.fillText(it.value, x + iconSize + 16, topY + 30);
+
       ctx.restore();
     }
   }
 
   // ======================
-  // Body：地址/套餐/金额（自动换行 + 自动缩字）
+  // Body：地址/电话/套餐/金额
   // ======================
   function drawBody(d, L) {
     const WHITE = "#f3f3f4";
-
     const lines = [];
+
     if (d.address) lines.push(`地址：${d.address}`);
+    if (d.phone) lines.push(`电话：${d.phone}`);
     if (d.course) lines.push(`套餐：${d.course}`);
     if (d.price) lines.push(`金额：${d.price}`);
 
@@ -241,65 +259,114 @@
   }
 
   // ======================
-  // 字段提取（强力升级：日文/英文混合 + key下一行）
+  // Extra：把“备注/频度/要望/行き方”等放这里（不会再“被屏蔽”）
+  // ======================
+  function drawExtra(d, L) {
+    const MUTED = "rgba(243,243,244,0.78)";
+    const GOLD = "rgba(215,180,106,0.85)";
+
+    const parts = [];
+    if (d.frequency) parts.push(`来店频度：${d.frequency}`);
+    if (d.request) parts.push(`备注：${d.request}`);
+    if (d.note) parts.push(d.note);
+
+    const extraText = parts.join("\n").trim();
+    if (!extraText) return;
+
+    // 小标题
+    ctx.save();
+    ctx.fillStyle = GOLD;
+    ctx.font = `700 22px "PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("补充信息：", L.extra.x, L.extra.y);
+    ctx.restore();
+
+    drawMultilineAutoFit({
+      text: extraText,
+      x: L.extra.x,
+      y: L.extra.y + 30,
+      w: L.extra.w,
+      h: L.extra.h - 30,
+      maxFont: 24,
+      minFont: 18,
+      lineHeight: 1.55,
+      color: MUTED,
+      weight: 600,
+      family: `"PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`,
+    });
+  }
+
+  // ======================
+  // 字段提取：修复全角冒号/中英日混合/无年份日期/备注
   // ======================
   function extractFields(raw) {
     const text = normalize(raw);
     const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
 
-    // key: value 或 key\nvalue
-    const get = (keys) => pickValue(lines, keys);
+    const get = (keys) => pickValueFlexible(lines, keys);
 
     const rid = cleanLead(get([
-      "予約ID","予約番号","予約No","予約Ｎｏ",
+      "予約ID","予約番号","予約No",
       "Reservation ID","Reservation No","Booking ID","Confirmation","Confirmation No","Confirmation #"
     ]));
 
     let restaurant = cleanLead(get(["店舗名","店名","レストラン","Restaurant","Restaurant Name","Venue"]));
-    let guest = cleanLead(get(["予約名","予約人","予約者","お名前","ご予約名","Reservation Name","Guest","Guest Name","Name","Booker"]));
+    let guest = cleanLead(get([
+      "予約名","予約人","预约人","预约人姓名",
+      "予約者","お名前","ご予約名",
+      "Reservation Name","Guest","Guest Name","Name","Booker"
+    ]));
 
-    // 日时（一个字段里通常含日期+时间）
-    const datetime = get(["日時","予約日時","Date","Time","Reservation Date","Booking Date"]);
-
-    // 日期/时间解析（修复你现在只出2026的问题）
-    const { date, time } = parseDateTime(datetime || text);
+    const datetimeLine = get(["日時","予約日時","Date","Time","Reservation Date","Booking Date"]);
+    const { date, time } = parseDateTime(datetimeLine || text);
 
     // 人数/席位
-    let peopleLine = get(["人数","予約人数","Seats","Guests","Party Size","People"]);
-    peopleLine = cleanLead(peopleLine);
-
-    let people = "";
+    let peopleLine = cleanLead(get(["人数","予約人数","Seats","Guests","Party Size","People"]));
     let seat = cleanLead(get(["席","席位","お席","席種","Seat","Seating"]));
 
-    // 如果 peopleLine 里带 “1人 / カウンター”
+    // 兼容：人数: 2 人 / 席: カウンター
     const ps = splitPeopleSeat(peopleLine);
-    if (ps.people) people = ps.people;
+    const people = ps.people || peopleLine || "";
     if (!seat && ps.seat) seat = ps.seat;
 
-    // 地址：优先 Address/住所，否则抓“像地址的行”
+    // 地址/电话
     let address = cleanLead(get(["住所","所在地","Address","Venue Address","Location"]));
     if (!address) address = guessAddress(lines);
+
+    let phone = cleanLead(get(["電話番号","電話","TEL","Tel","Phone","Telephone","Contact"]));
+    if (!phone) phone = (text.match(/(\d{2,4}-\d{2,4}-\d{3,4})/) || [""])[0];
 
     // 套餐/金额
     let course = cleanLead(get(["コース","コース名","Course","Menu","Package","Plan"]));
     let price = cleanLead(get(["総額","合計","料金","金額","Total Price","Total","Price"]));
     if (!price) price = (text.match(/[¥￥]\s?[\d,]+/) || [""])[0];
 
-    // 兜底：如果店名没识别到，别把预约号/人名当店名
+    // 频度/要望/备注
+    const frequency = cleanLead(get(["来店頻度","来店频度","Frequency","Visit Frequency"]));
+    const request = cleanLead(get(["ご要望","要望","备注","Remarks","Note","Request"]));
+
+    // 其它说明：比如“行き方はこちら”
+    const note = lines.find(l => /行き方|ご覧ください|Please be at the restaurant|NO SHOW/i.test(l)) || "";
+
+    // 兜底：防止空店名
     if (!restaurant) restaurant = guessRestaurant(lines, { rid, guest });
 
-    // 标准化输出
     return {
-      rid: rid || "",
+      rid,
       restaurant: removeLeadingBoxes(restaurant),
       guest: removeLeadingBoxes(guest),
       date: date || "—",
       time: time || "—",
       people: formatPeople(people),
-      seat: removeLeadingBoxes(seat),
+      seat: removeLeadingBoxes(seat) || "—",
       address,
+      phone,
       course,
       price,
+      frequency,
+      request,
+      note
     };
   }
 
@@ -312,25 +379,35 @@
       .trim();
   }
 
-  function pickValue(lines, keys) {
-    // key: value
+  function cleanLead(s) {
+    return String(s || "").replace(/^[■□◆●・▶▷►◼︎\-\*]+\s*/g, "").trim();
+  }
+
+  function removeLeadingBoxes(s) {
+    return String(s || "").replace(/^[■□◆●◼︎]+/g, "").trim();
+  }
+
+  // ✅ 支持：key: value / key：value / key : value / key： value / key\nvalue
+  function pickValueFlexible(lines, keys) {
+    const keySet = keys.map(k => String(k));
+
+    // 1) 同行 key + 冒号 + value
     for (const line of lines) {
-      for (const k of keys) {
-        if (line.toLowerCase().startsWith((k + ":").toLowerCase())) {
-          return line.slice(k.length + 1).trim();
-        }
-        if (line.toLowerCase().startsWith((k + "：").toLowerCase())) {
-          return line.slice(k.length + 1).trim();
-        }
+      for (const k of keySet) {
+        // 允许前后空格 + 半角/全角冒号
+        const re = new RegExp(`^\\s*${escapeRe(k)}\\s*[:：]\\s*(.+)$`, "i");
+        const m = line.match(re);
+        if (m && m[1]) return m[1].trim();
       }
     }
-    // key \n value
+
+    // 2) key 单独一行，值在下一行
     for (let i = 0; i < lines.length; i++) {
-      for (const k of keys) {
-        if (lines[i] === k) {
-          // 往后找一个非空行
+      for (const k of keySet) {
+        const re = new RegExp(`^\\s*${escapeRe(k)}\\s*$`, "i");
+        if (re.test(lines[i])) {
           for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
-            if (lines[j]) return lines[j];
+            if (lines[j]) return lines[j].trim();
           }
         }
       }
@@ -338,38 +415,41 @@
     return "";
   }
 
-  function cleanLead(s) {
-    return String(s || "").replace(/^[■□◆●・▶▷►◼︎\-\*]+\s*/g, "").trim();
-  }
-
-  function removeLeadingBoxes(s) {
-    // 解决你截图里“店名前面有符号”的情况（■□等）
-    return String(s || "").replace(/^[■□◆●◼︎]+/g, "").trim();
+  function escapeRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   function splitPeopleSeat(s) {
     const str = String(s || "").trim();
     if (!str) return { people: "", seat: "" };
+    // 2人 / カウンター
     const m = str.match(/(\d{1,2}\s*(?:人|名)?)\s*\/\s*(.+)$/);
-    if (!m) {
-      // 纯数字
-      const n = str.match(/(\d{1,2})/);
-      return { people: n ? `${n[1]}名` : str, seat: "" };
-    }
-    return { people: m[1].trim(), seat: m[2].trim() };
+    if (m) return { people: m[1].trim(), seat: m[2].trim() };
+
+    // 2 人
+    const n = str.match(/(\d{1,2})/);
+    return { people: n ? `${n[1]}名` : str, seat: "" };
   }
 
+  // ✅ 修复：无年份日期（01月09日(金) 18:00） => 01/09
   function parseDateTime(anyText) {
     const s = String(anyText || "");
 
-    // 日文：2026年01月15日(木) 17:00
+    // 有年份（日文）
     const mj = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日.*?(\d{1,2}:\d{2})/);
     if (mj) {
       const yyyy = mj[1];
       const mm = String(mj[2]).padStart(2, "0");
       const dd = String(mj[3]).padStart(2, "0");
-      const time = mj[4];
-      return { date: `${yyyy}/${mm}/${dd}`, time };
+      return { date: `${yyyy}/${mm}/${dd}`, time: mj[4] };
+    }
+
+    // ✅ 无年份（日文）：01月09日(金) 18:00
+    const mj2 = s.match(/(\d{1,2})月(\d{1,2})日.*?(\d{1,2}:\d{2})/);
+    if (mj2) {
+      const mm = String(mj2[1]).padStart(2, "0");
+      const dd = String(mj2[2]).padStart(2, "0");
+      return { date: `${mm}/${dd}`, time: mj2[3] };
     }
 
     // 2026-01-15 17:00 / 2026/01/15 17:00
@@ -381,9 +461,8 @@
       return { date: `${yyyy}/${mm}/${dd}`, time: m2[4] };
     }
 
-    // 英文：Tuesday February 10, 2026 + 8:30 PM
+    // 英文：Date + Time
     const time = (s.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i) || s.match(/(\d{1,2}:\d{2})/))?.[1] || "";
-    // 尝试 Date.parse 从英文中抓日期
     const dp = Date.parse(s);
     if (!Number.isNaN(dp)) {
       const d = new Date(dp);
@@ -393,20 +472,9 @@
       return { date: `${yyyy}/${mm}/${dd}`, time: time || "" };
     }
 
-    // 最后兜底：全局找一个日文日期 + 时间
-    const d3 = s.match(/(\d{4}年\d{1,2}月\d{1,2}日)/)?.[1] || "";
+    // 兜底
     const t3 = s.match(/(\d{1,2}:\d{2})/)?.[1] || "";
-    if (d3) {
-      const mj2 = d3.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
-      if (mj2) {
-        const yyyy = mj2[1];
-        const mm = String(mj2[2]).padStart(2, "0");
-        const dd = String(mj2[3]).padStart(2, "0");
-        return { date: `${yyyy}/${mm}/${dd}`, time: t3 || "" };
-      }
-    }
-
-    return { date: "", time: time || "" };
+    return { date: "", time: t3 };
   }
 
   function formatPeople(p) {
@@ -418,35 +486,30 @@
   }
 
   function guessAddress(lines) {
-    // 找“像地址”的行：含 Tokyo/東京都/〒/区/市/町 等
-    const idx = lines.findIndex(l => /(〒|東京都|Tokyo|Japan|区|市|町|Chome|City)/i.test(l));
+    const idx = lines.findIndex(l => /(〒|北海道|東京都|Tokyo|Japan|区|市|町|Chome|City)/i.test(l));
     if (idx < 0) return "";
     let addr = cleanLead(lines[idx]);
-    // 拼接下一行（如果也像地址）
     const next = lines[idx + 1] || "";
-    if (next && !/(人数|コース|予約|日時|Time|Date|Seats|Total|Price|金額)/i.test(next)) {
+    if (next && !/(人数|コース|予約|日時|Time|Date|Seats|Total|Price|金額|電話)/i.test(next)) {
       addr += " " + cleanLead(next);
     }
     return addr.trim();
   }
 
   function guessRestaurant(lines, known) {
-    // 避免把 rid / guest 当店名
-    const bad = /(予約|id|no\.|日時|日付|時間|人数|住所|電話|phone|address|date|time|seats|guests|total|price)/i;
-
+    const bad = /(予約|id|no\.|日時|日付|時間|人数|住所|電話|phone|address|date|time|seats|guests|total|price|要望|頻度)/i;
     for (const l of lines) {
       const v = removeLeadingBoxes(cleanLead(l));
       if (!v) continue;
       if (known?.rid && v.includes(known.rid)) continue;
       if (known?.guest && v.includes(known.guest)) continue;
       if (bad.test(v)) continue;
-      // 店名一般不太长
       if (v.length >= 2 && v.length <= 30) return v;
     }
     return "";
   }
 
-  // ========== 高级 icon（画出来，不用emoji）==========
+  // ========== icon ==========
   function drawIcon(type, x, y, s, color) {
     ctx.save();
     ctx.strokeStyle = color;
@@ -500,17 +563,14 @@
       const sy = y + s * 0.18;
       const sw = s * 0.56;
       const sh = s * 0.62;
-      // 背
       ctx.beginPath();
       ctx.moveTo(sx, sy);
       ctx.lineTo(sx, sy + sh * 0.55);
       ctx.stroke();
-      // 坐面
       ctx.beginPath();
       ctx.moveTo(sx, sy + sh * 0.55);
       ctx.lineTo(sx + sw, sy + sh * 0.55);
       ctx.stroke();
-      // 腿
       ctx.beginPath();
       ctx.moveTo(sx + sw, sy + sh * 0.55);
       ctx.lineTo(sx + sw, sy + sh);
@@ -522,7 +582,7 @@
     ctx.restore();
   }
 
-  // ========== 文本排版工具 ==========
+  // ========== 文本工具 ==========
   function fitFontOneLine(text, maxW, maxFont, minFont, weight, family) {
     const t = String(text || "");
     let size = maxFont;
@@ -565,7 +625,6 @@
       fontSize -= 2;
     }
 
-    // 仍放不下：截断
     ctx.font = `${weight} ${minFont}px ${family}`;
     const lines = wrapText(t, w, ctx);
     const maxLines = Math.max(1, Math.floor(h / (minFont * lineHeight)));
@@ -583,7 +642,6 @@
   function wrapText(text, maxWidth, ctx) {
     const paragraphs = text.split("\n");
     const lines = [];
-
     for (const p of paragraphs) {
       if (!p.trim()) {
         lines.push("");
@@ -593,9 +651,8 @@
       let line = "";
       for (const tok of tokens) {
         const test = line ? line + tok : tok;
-        if (ctx.measureText(test).width <= maxWidth) {
-          line = test;
-        } else {
+        if (ctx.measureText(test).width <= maxWidth) line = test;
+        else {
           if (line) lines.push(line);
           line = tok.trimStart();
         }
@@ -627,7 +684,7 @@
     return line.slice(0, Math.max(0, line.length - 2)) + "…";
   }
 
-  // ========== 画模板/画错误（永不黑屏） ==========
+  // ========== 画模板/画错误 ==========
   function drawTemplateOnly(text) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
