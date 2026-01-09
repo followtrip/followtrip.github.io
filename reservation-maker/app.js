@@ -2,8 +2,6 @@
 // 放在 reservation-maker/ 目录
 // 文件：template.png, index.html, style.css, app.js（本文件）
 // 输出：与 template.png 同尺寸的高清 PNG（微信发图清晰）
-
-// ---------------- DOM ----------------
 const inputEl = document.getElementById("input");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d", { alpha: true });
@@ -11,37 +9,57 @@ const btnGenerate = document.getElementById("btnGenerate");
 const btnDownload = document.getElementById("btnDownload");
 
 let lastDataURL = null;
+let TEMPLATE_READY = false;
 
-// ---------------- Template ----------------
+// 先禁用按钮，避免模板没加载就点生成
+btnGenerate.disabled = true;
+btnDownload.disabled = true;
+
 const templateImg = new Image();
 templateImg.src = "./template.png";
 
 templateImg.onload = () => {
-  // 以模板真实尺寸作为画布尺寸（你现在模板 1455×2192）
+  TEMPLATE_READY = true;
+
+  // 关键：用模板真实尺寸设置 canvas
   canvas.width = templateImg.naturalWidth;
   canvas.height = templateImg.naturalHeight;
 
-  // 初始渲染
+  // 开启生成按钮
+  btnGenerate.disabled = false;
+
+  // 初始渲染（现在一定会带模板，不会黑）
   renderToCanvas("请粘贴预约信息，然后点击「生成图片」");
 };
 
 templateImg.onerror = () => {
-  alert(
-    "template.png 加载失败：请确认 reservation-maker 目录下存在 template.png，且文件名完全一致（区分大小写）"
-  );
+  alert("template.png 加载失败：请确认同目录下存在 template.png，且大小写完全一致");
 };
 
-// ---------------- Buttons ----------------
+// 生成
 btnGenerate.addEventListener("click", () => {
+  if (!TEMPLATE_READY) {
+    alert("模板还没加载完成，请等 1 秒后再点生成（或刷新页面后再试）");
+    return;
+  }
+
+  // 双保险：若 canvas 尺寸不对，强制校正
+  if (canvas.width !== templateImg.naturalWidth || canvas.height !== templateImg.naturalHeight) {
+    canvas.width = templateImg.naturalWidth;
+    canvas.height = templateImg.naturalHeight;
+  }
+
   const raw = (inputEl.value || "").trim();
   if (!raw) {
     alert("请先粘贴预约信息");
     return;
   }
+
   renderToCanvas(raw);
   btnDownload.disabled = false;
 });
 
+// 下载
 btnDownload.addEventListener("click", () => {
   if (!lastDataURL) return;
   const a = document.createElement("a");
@@ -121,6 +139,21 @@ function getLayout() {
 }
 
 // ---------------- Render ----------------
+function renderToCanvas(rawText) {
+  if (!TEMPLATE_READY) return;
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(templateImg, 0, 0, W, H);
+
+  // 下面保持你原本的字段提取 + drawReservationCard(...)
+  const fields = extractFields(rawText);
+  drawReservationCard(fields);
+
+  lastDataURL = canvas.toDataURL("image/png");
+}
 function renderToCanvas(rawText) {
   const { W, H } = canvas;
   ctx.clearRect(0, 0, W, H);
@@ -776,13 +809,33 @@ function guessAddress(lines) {
 // 统一展示：日期/时间/人数
 function smartDate(s) {
   if (!s) return "";
-  // 只做轻量处理：保留原始，但去掉多余空格
-  return s.replace(/\s{2,}/g, " ").trim();
+  s = String(s).replace(/\s{2,}/g, " ").trim();
+
+  // 英文：Tuesday February 10, 2026 -> February 10, 2026 -> Feb 10, 2026
+  // 去掉星期
+  s = s.replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+/i, "");
+
+  // 月份缩写
+  const map = {
+    January:"Jan", February:"Feb", March:"Mar", April:"Apr", May:"May", June:"Jun",
+    July:"Jul", August:"Aug", September:"Sep", October:"Oct", November:"Nov", December:"Dec"
+  };
+  for (const k in map) {
+    const re = new RegExp("\\b" + k + "\\b", "i");
+    if (re.test(s)) { s = s.replace(re, map[k]); break; }
+  }
+
+  return s;
 }
 
 function smartTime(s) {
   if (!s) return "";
-  return s.replace(/\s{2,}/g, " ").trim();
+  s = String(s).replace(/\s{2,}/g, " ").trim();
+
+  // 8:30 PM -> 8:30 PM（保留）
+  // 18:00～ -> 18:00（去掉波浪）
+  s = s.replace(/[～~].*$/, "").trim();
+  return s;
 }
 
 function smartPeople(s) {
