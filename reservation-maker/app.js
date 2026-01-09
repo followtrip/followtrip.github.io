@@ -1,6 +1,4 @@
-// ====== 预约确认函生成器（字段提取 + 两栏排版 + Icon 行：日期/时间/人数）======
-// 放在 reservation-maker/ 目录：template.png, index.html, style.css, app.js
-// 依赖 DOM：#input #canvas #btnGenerate #btnDownload
+// ====== 预约确认函生成器（字段提取 + 两栏排版 + Icon 行：日期/时间/人数+席位Tag）======
 
 const inputEl = document.getElementById("input");
 const canvas = document.getElementById("canvas");
@@ -130,10 +128,10 @@ function drawReservationCard(f) {
   ctx.save();
   ctx.textBaseline = "top";
 
-  // ---- Header（店名居中 + NO + 预约人）----
-  const restaurant = (f.restaurant || "（未识别店名）").trim();
-  const guest = (f.guest || "").trim(); // 抓不到就空，不要乱用 1名様
+  // ✅ Header：店名居中 + NO + 预约人（一定在店名下面）
+  const restaurant = cleanLeadingSymbols((f.restaurant || "（未识别店名）").trim());
   const rid = f.rid ? `NO. ${f.rid}` : "";
+  const guest = cleanLeadingSymbols((f.guest || "").trim()); // 抓不到就空
 
   const nameMax = Math.round(headerBox.h * 0.34);
   const nameMin = 34;
@@ -141,10 +139,12 @@ function drawReservationCard(f) {
 
   const ridFont = 30;
   const guestFont = 38;
-
   const gap = Math.round(padding * 0.45);
-  const headerTotalH = nameFont + gap + (rid ? ridFont + gap : 0) + (guest ? guestFont : 0);
 
+  // 预约人即使为空，也不允许误用“2名様”占位
+  const hasGuest = !!guest;
+
+  const headerTotalH = nameFont + gap + (rid ? ridFont + gap : 0) + (hasGuest ? guestFont : 0);
   let hy = headerBox.y + Math.max(0, Math.floor((headerBox.h - headerTotalH) / 2));
 
   ctx.fillStyle = WHITE;
@@ -160,22 +160,22 @@ function drawReservationCard(f) {
     hy += ridFont + gap;
   }
 
-  if (guest) {
+  if (hasGuest) {
     ctx.fillStyle = WHITE;
     ctx.font = `800 ${guestFont}px ${SANS}`;
     ctx.fillText(guest, headerBox.x + headerBox.w / 2, hy);
   }
 
-  // ---- Left：Icon 行（日期更清晰）----
+  // ---- Left：Icon 行（日期/时间/人数 + 席位Tag）----
   const iconRowH = Math.round(leftBody.h * 0.30);
   const iconBox = { x: leftBody.x, y: leftBody.y, w: leftBody.w, h: iconRowH };
 
   drawIconRow({
     box: iconBox,
-    dateText: normalizeDateToYMDorMD(f.dateRaw),   // ✅ 有年：YYYY/MM/DD；无年：MM/DD
+    dateText: normalizeDateToYMDorMD(f.dateRaw),
     timeText: normalizeTime(f.timeRaw),
     peopleText: normalizePeople(f.peopleRaw),
-    seatText: f.seat || "",
+    seatText: (f.seat || "").trim(),
     GOLD,
     WHITE,
     MUTED,
@@ -225,21 +225,35 @@ function drawReservationCard(f) {
 }
 
 // ================= Icon Row =================
+// ================= Icon Row（4 小块：日期 / 时间 / 人数 / 席位）=================
 function drawIconRow({ box, dateText, timeText, peopleText, seatText, GOLD, WHITE, MUTED, SANS }) {
   const x = box.x, y = box.y, w = box.w, h = box.h;
-  const segW = Math.floor(w / 3);
 
-  // 分割线
+  // ✅ 4 等分
+  const segW = Math.floor(w / 4);
+
+  // 分割线（更淡一点，更高级）
   ctx.save();
-  ctx.strokeStyle = "rgba(215,180,106,0.18)";
+  ctx.strokeStyle = "rgba(215,180,106,0.16)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, y + Math.floor(h * 0.62));
   ctx.lineTo(x + w, y + Math.floor(h * 0.62));
   ctx.stroke();
+
+  // 竖向分隔（细）
+  ctx.strokeStyle = "rgba(215,180,106,0.10)";
+  ctx.lineWidth = 2;
+  for (let i = 1; i <= 3; i++) {
+    const vx = x + segW * i;
+    ctx.beginPath();
+    ctx.moveTo(vx, y + Math.floor(h * 0.18));
+    ctx.lineTo(vx, y + Math.floor(h * 0.92));
+    ctx.stroke();
+  }
   ctx.restore();
 
-  const labelFont = 22;
+  const labelFont = 21;
 
   drawIconSegment2({
     x: x + 0 * segW, y, w: segW, h,
@@ -249,8 +263,8 @@ function drawIconRow({ box, dateText, timeText, peopleText, seatText, GOLD, WHIT
     valueBottom: "",
     GOLD, WHITE, SANS,
     labelFont,
-    valueFontMax: 34,
-    valueMin: 22
+    valueFontMax: 32,
+    valueMin: 20
   });
 
   drawIconSegment2({
@@ -261,27 +275,42 @@ function drawIconRow({ box, dateText, timeText, peopleText, seatText, GOLD, WHIT
     valueBottom: "",
     GOLD, WHITE, SANS,
     labelFont,
-    valueFontMax: 34,
-    valueMin: 22
+    valueFontMax: 32,
+    valueMin: 20
   });
 
   drawIconSegment2({
     x: x + 2 * segW, y, w: segW, h,
-    icon: "person", // ✅ 人型 icon
+    icon: "person",
     label: "人数",
     valueTop: peopleText || "—",
-    valueBottom: seatText || "",
+    valueBottom: "",
     GOLD, WHITE, SANS,
     labelFont,
-    valueFontMax: 34,
-    valueMin: 22,
-    bottomColor: "rgba(215,180,106,0.95)",
+    valueFontMax: 32,
+    valueMin: 20
+  });
+
+  // ✅ 第四块：席位（用 Tag 风格，更突出）
+  drawIconSegment2({
+    x: x + 3 * segW, y, w: segW, h,
+    icon: "seat",
+    label: "席位",
+    valueTop: seatText ? seatText : "—",
+    valueBottom: "",
+    GOLD, WHITE, SANS,
+    labelFont,
+    valueFontMax: 28,
+    valueMin: 18,
+    topAsTag: true
   });
 }
 
+// ================= Icon Segment（增强：支持 topAsTag）=================
 function drawIconSegment2({
   x, y, w, h, icon, label, valueTop, valueBottom,
-  GOLD, WHITE, SANS, labelFont, valueFontMax, valueMin, bottomColor
+  GOLD, WHITE, SANS, labelFont, valueFontMax, valueMin,
+  bottomAsTag, topAsTag
 }) {
   const padX = Math.round(w * 0.10);
   const topY = y + Math.round(h * 0.18);
@@ -292,28 +321,84 @@ function drawIconSegment2({
 
   drawSimpleIcon(icon, iconX, iconY, iconSize, GOLD);
 
+  // label
   ctx.fillStyle = "rgba(215,180,106,0.95)";
   ctx.font = `800 ${labelFont}px ${SANS}`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText(label, iconX + iconSize + 12, iconY);
+  ctx.fillText(label, iconX + iconSize + 10, iconY);
 
+  // valueTop
   const valueY = iconY + labelFont + 12;
-  const maxW = w - padX * 2 - iconSize - 12;
-  const vFont = fitSingleLineFont(valueTop, maxW, valueFontMax, valueMin, 850, SANS);
+  const maxW = w - padX * 2 - iconSize - 10;
 
-  ctx.fillStyle = WHITE;
-  ctx.font = `850 ${vFont}px ${SANS}`;
-  ctx.fillText(valueTop, iconX + iconSize + 12, valueY);
+  if (topAsTag && valueTop) {
+    // ✅ 席位：Tag 风格
+    const tagFont = fitSingleLineFont(valueTop, maxW, valueFontMax, valueMin, 850, SANS);
+    ctx.font = `850 ${tagFont}px ${SANS}`;
+    const tw = ctx.measureText(valueTop).width;
 
+    const tagPadX = 12;
+    const tagPadY = 7;
+    const tagH = tagFont + tagPadY * 2;
+    const tagW = Math.min(maxW, tw + tagPadX * 2);
+
+    const tx = iconX + iconSize + 10;
+    const ty = valueY;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(215,180,106,0.18)";
+    ctx.strokeStyle = "rgba(215,180,106,0.60)";
+    ctx.lineWidth = 2;
+    roundRect(tx, ty, tagW, tagH, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(215,180,106,0.98)";
+    ctx.fillText(valueTop, tx + tagPadX, ty + tagPadY);
+    ctx.restore();
+  } else {
+    const vFont = fitSingleLineFont(valueTop || "—", maxW, valueFontMax, valueMin, 850, SANS);
+    ctx.fillStyle = WHITE;
+    ctx.font = `850 ${vFont}px ${SANS}`;
+    ctx.fillText(valueTop || "—", iconX + iconSize + 10, valueY);
+  }
+
+  // valueBottom（保留兼容，不一定用得上）
   if (valueBottom) {
-    const bY = valueY + vFont + 10;
-    const bFont = Math.max(18, Math.round(vFont * 0.62));
-    ctx.fillStyle = bottomColor || "rgba(243,243,244,0.78)";
-    ctx.font = `750 ${bFont}px ${SANS}`;
-    ctx.fillText(valueBottom, iconX + iconSize + 12, bY);
+    const bY = valueY + Math.max(20, Math.round(labelFont * 1.8));
+    if (bottomAsTag) {
+      const tagFont = Math.max(18, Math.round(labelFont * 0.95));
+      ctx.font = `850 ${tagFont}px ${SANS}`;
+      const tw = ctx.measureText(valueBottom).width;
+
+      const tagPadX = 12;
+      const tagPadY = 7;
+      const tagH = tagFont + tagPadY * 2;
+      const tagW = Math.min(maxW, tw + tagPadX * 2);
+
+      const tx = iconX + iconSize + 10;
+      const ty = bY;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(215,180,106,0.18)";
+      ctx.strokeStyle = "rgba(215,180,106,0.60)";
+      ctx.lineWidth = 2;
+      roundRect(tx, ty, tagW, tagH, 14);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(215,180,106,0.98)";
+      ctx.fillText(valueBottom, tx + tagPadX, ty + tagPadY);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(215,180,106,0.95)";
+      ctx.font = `750 18px ${SANS}`;
+      ctx.fillText(valueBottom, iconX + iconSize + 10, bY);
+    }
   }
 }
+
 
 function drawSimpleIcon(type, x, y, s, color) {
   ctx.save();
@@ -363,11 +448,38 @@ function drawSimpleIcon(type, x, y, s, color) {
     const br = s * 0.12;
     roundRectStroke(bx, by, bodyW, bodyH, br);
   }
+  } else if (type === "seat") {
+    // 简洁的“椅子”图标（更像日式 UI）
+    const bx = x + s * 0.18;
+    const by = y + s * 0.22;
+    const bw = s * 0.64;
+    const bh = s * 0.58;
 
+    // 椅背
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh * 0.55);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(bx + bw * 0.55, by);
+    ctx.stroke();
+
+    // 坐垫
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh * 0.60);
+    ctx.lineTo(bx + bw, by + bh * 0.60);
+    ctx.stroke();
+
+    // 椅脚
+    ctx.beginPath();
+    ctx.moveTo(bx + bw * 0.15, by + bh);
+    ctx.lineTo(bx + bw * 0.15, by + bh * 0.60);
+    ctx.moveTo(bx + bw * 0.85, by + bh);
+    ctx.lineTo(bx + bw * 0.85, by + bh * 0.60);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-function roundRectStroke(x, y, w, h, r) {
+function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -378,6 +490,11 @@ function roundRectStroke(x, y, w, h, r) {
   ctx.quadraticCurveTo(x, y + h, x, y + h - r);
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function roundRectStroke(x, y, w, h, r) {
+  roundRect(x, y, w, h, r);
   ctx.stroke();
 }
 
@@ -494,13 +611,18 @@ function extractFields(raw) {
          "Reservation ID","Reservation No","Booking ID","Booking No"]) ||
     getLine(/(?:予約ID|予約番号|No\.?|NO\.?|Reservation\s*(?:ID|No)|Booking\s*(?:ID|No)|Confirmation(?:\s*(?:No|#))?)\s*[:：#]?\s*([A-Za-z0-9\-]+)/i);
 
-  const restaurant =
+  let restaurant =
     get(["店舗名","店名","レストラン","レストラン名","Restaurant","Restaurant Name","Venue"]) ||
     guessRestaurant(lines);
 
-  const guest =
+  restaurant = cleanLeadingSymbols(restaurant);
+
+  // ✅ 预约人：强命中（包括你右侧出现的 “予約人： lu lu”）
+  let guest =
     get(["予約名","予約人","予約者","お客様名","お名前","ご予約名","Reservation Name","Guest","Guest Name","Booker"]) ||
-    guessGuest(lines);
+    getLine(/(?:予約人|予約名|お客様名|ご予約名)\s*[:：]\s*([^\n]+)/i);
+
+  guest = cleanLeadingSymbols(guest);
 
   const dtLine =
     get(["日時","予約日時","予約日","Date","Reservation Date","Booking Date"]) ||
@@ -584,14 +706,21 @@ function extractFields(raw) {
   };
 }
 
-// ================= Helpers (robust for table paste) =================
+// ================= Helpers =================
 function normalize(s) {
   return String(s || "")
     .replace(/\r\n/g, "\n")
-    .replace(/\t/g, " ")          // ✅ tab -> space
+    .replace(/\t/g, " ")
     .replace(/[：]\s*/g, "：")
+    .replace(/:\s*/g, "：")     // ✅ ASCII ":" 也统一，避免漏匹配
     .replace(/[ ]{2,}/g, " ")
     .trim();
+}
+
+function cleanLeadingSymbols(s) {
+  if (!s) return "";
+  // ✅ 去掉店名前面常见符号：■ □ ● ・ ◆ ◇ ▪︎ 等，以及多余空白
+  return String(s).replace(/^[■□●・◆◇▪︎▫︎★☆■□▢◻︎◼︎◽︎\s]+/g, "").trim();
 }
 
 function match(text, re) {
@@ -599,23 +728,17 @@ function match(text, re) {
   return m ? (m[1] || "").trim() : "";
 }
 
-// ✅ 支持：key：value / key value / key<TAB>value / key 单行+下一行 value
 function pickAfter(text, keys) {
-  // 1) key：value
   for (const k of keys) {
     const re = new RegExp(`${escapeRe(k)}\\s*[:：]\\s*([^\\n]+)`, "i");
     const m = text.match(re);
     if (m && m[1]) return m[1].trim();
   }
-
-  // 2) key value（同一行空格/Tab分隔）
   for (const k of keys) {
     const re = new RegExp(`^\\s*${escapeRe(k)}\\s+([^\\n]+)$`, "im");
     const m = text.match(re);
     if (m && m[1]) return m[1].trim();
   }
-
-  // 3) key 单独一行，值在下一行
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -633,32 +756,21 @@ function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ✅ 更严格：跳过纯 ID / 人数 / 日期 / 地址电话等
 function guessRestaurant(lines) {
   const bad = /(Date|Time|Seats|Guests|住所|電話|Phone|Address|予約|人数|コース|NO\.|No\.)/i;
-  const looksLikeId = (s) => /^[A-Z0-9\-]{6,24}$/.test(s);         // 纯 ID
+  const looksLikeId = (s) => /^[A-Z0-9\-]{6,24}$/.test(s);
   const looksLikePeople = (s) => /^\d{1,2}\s*(名|人)/.test(s) || /名様/.test(s);
 
   for (const l of lines) {
-    if (bad.test(l)) continue;
-    if (looksLikeId(l)) continue;
-    if (looksLikePeople(l)) continue;
-    if (l.length < 2 || l.length > 40) continue;
-    return l;
+    const ll = cleanLeadingSymbols(l);
+    if (!ll) continue;
+    if (bad.test(ll)) continue;
+    if (looksLikeId(ll)) continue;
+    if (looksLikePeople(ll)) continue;
+    if (ll.length < 2 || ll.length > 40) continue;
+    return ll;
   }
   return "";
-}
-
-// ✅ 更严格：不要把“1名様”当预约人
-function guessGuest(lines) {
-  for (const l of lines) {
-    if (/Reservation Name\s*[:：]/i.test(l)) return l.split(/[:：]/)[1]?.trim() || "";
-  }
-  const looksLikePeople = (s) => /^\d{1,2}\s*(名|人)/.test(s) || /名様/.test(s);
-  const bad = /(Date|Time|Seats|Guests|住所|電話|Phone|Address|予約|人数|コース|NO\.|No\.)/i;
-
-  const cand = lines.find(l => /(様|先生|女士|Guest)/i.test(l) && !looksLikePeople(l) && !bad.test(l));
-  return cand || "";
 }
 
 function guessAddress(lines) {
@@ -668,13 +780,12 @@ function guessAddress(lines) {
   const next1 = lines[idx + 1] || "";
   const next2 = lines[idx + 2] || "";
   const joinable = (s) => s && s.length <= 48 && !/(Phone|TEL|電話|Time|Date|Seats|Guests|予約|人数|コース)/i.test(s);
-  let addr = cand;
-  if (joinable(next1)) addr += ` ${next1}`;
-  if (joinable(next2)) addr += ` ${next2}`;
+  let addr = cand.trim();
+  if (joinable(next1)) addr += ` ${next1.trim()}`;
+  if (joinable(next2)) addr += ` ${next2.trim()}`;
   return addr.trim();
 }
 
-// 支持：2026年01月15日(木) 17:00 / 1月11日(日) 18:00～
 function parseDateTimeLine(line) {
   const out = { dateFromDT: "", timeFromDT: "" };
   if (!line) return out;
@@ -694,7 +805,7 @@ function parseDateTimeLine(line) {
   if (mJP2) {
     const mm = String(mJP2[1]).padStart(2, "0");
     const dd = String(mJP2[2]).padStart(2, "0");
-    out.dateFromDT = `${mm}/${dd}`; // 无年份
+    out.dateFromDT = `${mm}/${dd}`;
     out.timeFromDT = mJP2[3];
     return out;
   }
