@@ -132,7 +132,7 @@
       800,
       `"Noto Serif JP","Noto Serif SC","Times New Roman",serif`
     );
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = "#f3f3f4";
     ctx.font = `800 ${nameFont}px "Noto Serif JP","Noto Serif SC","Times New Roman",serif`;
     ctx.fillText(restaurant, centerX, y);
 
@@ -145,7 +145,7 @@
       700,
       `"PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`
     );
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = "#f3f3f4";
     ctx.font = `700 ${guestFont}px "PingFang SC","Noto Sans CJK JP","Microsoft YaHei",sans-serif`;
     ctx.fillText(guest, centerX, y);
 
@@ -255,77 +255,120 @@
   }
 
   // ======================
-  // 字段提取：日/英 + key下一行 + 你自定义“预约人”
+  // 字段提取：一次性修复（日期/人数/用途 + ■表格格式 + 金额 + 基础日文短语）
   // ======================
   function extractFields(raw) {
     const text = normalize(raw);
     const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
 
-    const get = (keys) => pickValue(lines, keys);
+    const get = (keys) => cleanLead(pickValue(lines, keys));
 
-    // 预约ID
-    const rid = cleanLead(get([
+    // 1) 预约ID：兼容 “予約番号 D6Z65J” / “■予約番号\n ULKM...” / “予約ID：826285”
+    let rid = get([
       "予約ID","予約番号","予約No","予約Ｎｏ",
       "Reservation ID","Reservation No","Booking ID","Confirmation","Confirmation No","Confirmation #"
-    ]));
+    ]);
+    if (!rid) {
+      rid =
+        (text.match(/(?:予約番号|予約ID)\s*[:：]?\s*([A-Za-z0-9\-]+)/i)?.[1] || "") ||
+        (text.match(/\bNO\.?\s*[:：]?\s*([A-Za-z0-9\-]+)\b/i)?.[1] || "");
+      rid = cleanLead(rid);
+    }
 
-    // 店名（修复：店舗名：xxx / 店舗名\nxxx）
-    let restaurant = cleanLead(get(["店舗名","店名","レストラン","Restaurant","Restaurant Name","Venue"]));
+    // 2) 店名：优先字段，其次“■レストラン”，再兜底第一条像店名的行
+    let restaurant = get(["店舗名","店名","レストラン","レストラン名","Restaurant","Restaurant Name","Venue","■レストラン"]);
+    if (!restaurant) restaurant = get(["レストラン"]);
+    if (!restaurant) restaurant = guessRestaurant(lines, { rid });
+    restaurant = removeLeadingBoxes(restaurant);
 
-    // 预约人（修复：支持 预约人:xxx / 予約名:xxx / Reservation Name）
-    let guest = cleanLead(get(["预约人","予約名","予約人","予約者","お名前","ご予約名","Reservation Name","Guest","Guest Name","Name","Booker"]));
+    // 3) 预约人：字段优先，其次 “xxx 様”
+    let guest = get(["预约人","預約人","予約名","予約人","予約者","お名前","ご予約名","Reservation Name","Guest","Guest Name","Name","Booker"]);
+    if (!guest) {
+      const sama = lines.find(l => /様\s*$/.test(l));
+      if (sama) guest = removeLeadingBoxes(cleanLead(sama));
+    }
+    guest = removeLeadingBoxes(guest);
 
-    // 日时（可能无年份：01月09日(金) 18:00）
-    const datetime = get(["日時","予約日時","Date","Time","Reservation Date","Booking Date"]);
-    const { date, time } = parseDateTime(datetime || text);
+    // 4) 日期/时间：字段优先，兜底支持“日期行 + 时间行”
+    const datetime = get(["予約日時","日時","Reservation Date","Booking Date","Date"]);
+    const timeOnly = get(["予約時間","時間","Time","Reservation Time","Booking Time"]);
+    let { date, time } = parseDateTime(datetime || text);
 
-    // 人数 + 席位
-    let peopleLine = cleanLead(get(["人数","予約人数","Seats","Guests","Party Size","People"]));
-    let seat = cleanLead(get(["席","席位","お席","席種","Seat","Seating"]));
+    if (!time && timeOnly) {
+      const t2 = parseDateTime(timeOnly);
+      time = t2.time || time;
+    }
+    if (date && !time) {
+      const m = text.match(/(^|\n)\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*($|\n)/im);
+      if (m) time = m[2].trim();
+    }
 
-    // peopleLine 里可能含 “2 人” 或 “1人 / カウンター”
+    // 5) 人数：字段优先，其次全文找“2名/2人/2名様”
+    let peopleLine = get(["予約人数","人数","Guests","Seats","Party Size","People"]);
+    if (!peopleLine) {
+      const mm = text.match(/(\d{1,2})\s*(?:名|人)\s*(?:様)?/);
+      peopleLine = mm ? mm[0] : "";
+    }
+
+    // 6) 席位：字段优先，其次全文找关键词
+    let seat = get(["お席","席","席位","席種","Seat","Seating","Table"]);
+    if (!seat) {
+      const s2 = lines.find(l => /(カウンター|テーブル|個室|指定なし|Counter|Table|Private)/i.test(l));
+      seat = s2 ? stripValueLine(s2.replace(/^.*[:：]\s*/, "")) : "";
+    }
+
+    // 7) 用途：必须提取出来（显示到备注）
+    const purpose = get(["用途","利用目的","Purpose","Occasion"]);
+
     const ps = splitPeopleSeat(peopleLine);
     const people = formatPeople(ps.people || peopleLine);
     if (!seat && ps.seat) seat = ps.seat;
 
     // 地址/电话/套餐
-    let address = cleanLead(get(["住所","所在地","Address","Venue Address","Location"]));
+    let address = get(["住所","所在地","Address","Venue Address","Location"]);
     if (!address) address = guessAddress(lines);
 
-    let phone = cleanLead(get(["電話番号","電話","TEL","Tel","Phone","Telephone","Contact"]));
+    let phone = get(["電話番号","電話","TEL","Tel","Phone","Telephone","Contact"]);
     if (!phone) {
       const m = text.match(/(\d{2,4}-\d{2,4}-\d{3,4})/);
       phone = m ? m[1] : "";
     }
 
-    let course = cleanLead(get(["コース","コース名","Course","Menu","Package","Plan"]));
+    let course = get(["コース名","コース","Course","Menu","Package","Plan"]);
 
-    // 金额：优先 Total/金額，再从 course 里抓 ¥ / 円
-    let price = cleanLead(get(["総額","合計","料金","金額","Total Price","Total","Price"]));
-    if (!price) {
-      const yen = (course || text).match(/([¥￥]\s?[\d,]+)|(\d[\d,]*円)/);
-      price = yen ? (yen[1] || yen[2] || "") : "";
+    // 8) 金额：优先 Total/金額/料金/合計；否则从 course 括号；再从全文取“主金额”（排除 550円 等）
+    let price = get(["総額","合計","料金","金額","Total Price","Total","Price"]);
+    if (!price && course) {
+      const cm = course.match(/(\d[\d,]*)円/);
+      if (cm) price = `¥${cm[1]}`;
     }
+    if (!price) price = pickMainMoney(text);
     price = normalizeMoney(price);
 
-    // 备注：ご要望 / Note / Requests（你这里 “it's my birthday”）
-    let note = cleanLead(get(["ご要望","備考","Note","Notes","Request","Requests","Special Request"]));
-    // 也把“来店頻度”这类非核心合并进备注（可选）
-    const freq = cleanLead(get(["来店頻度","Frequency","Visit Frequency"]));
-    if (freq && !note) note = `来店频度：${freq}`;
-    else if (freq && note) note = `来店频度：${freq}；${note}`;
+    // 9) 备注：合并 ご要望/備考/滞在可能時間/来店頻度 + 用途
+    let note = get(["ご要望","備考","Note","Notes","Request","Requests","Special Request"]);
+    const stay = get(["滞在可能時間"]);
+    const freq = get(["来店頻度","Frequency","Visit Frequency"]);
 
-    // 兜底：店名没识别到就猜，但避免把人名/ID当店名
-    if (!restaurant) restaurant = guessRestaurant(lines, { rid, guest });
+    const noteParts = [];
+    if (purpose) noteParts.push(`用途：${jpToCnPhrases(purpose)}`);
+    if (stay) noteParts.push(`停留：${jpToCnPhrases(stay)}`);
+    if (freq) noteParts.push(`来店频度：${jpToCnPhrases(freq)}`);
+    if (note) noteParts.push(jpToCnPhrases(note));
+    note = noteParts.join("；");
+
+    // 10) 日文短语轻量翻译（只针对你提到的）
+    seat = jpToCnPhrases(seat);
+    course = jpToCnPhrases(course);
 
     return {
       rid: rid || "",
-      restaurant: removeLeadingBoxes(restaurant),
-      guest: removeLeadingBoxes(guest),
+      restaurant: restaurant || "（未识别店名）",
+      guest: guest || "（未识别预约人）",
       date: date || "—",
       time: time || "—",
       people: people || "—",
-      seat: removeLeadingBoxes(seat) || "—",
+      seat: seat || "—",
       address: address || "",
       phone: phone || "",
       course: course || "",
@@ -335,7 +378,7 @@
   }
 
   // ======================
-  // 解析工具
+  // 工具：字段匹配（修复 ■/缩进/tab/key value）
   // ======================
   function normalize(s) {
     return String(s || "")
@@ -346,26 +389,45 @@
   }
 
   function pickValue(lines, keys) {
-    // key: value（兼容 key： value 中间空格）
+    // key: value / key：value / key\tvalue / key value
     for (const line of lines) {
+      const nl = stripKeyLine(line);
       for (const k of keys) {
-        const low = line.toLowerCase();
-        const k1 = (k + ":").toLowerCase();
-        const k2 = (k + "：").toLowerCase();
-        if (low.startsWith(k1)) return line.slice(k.length + 1).trim();
-        if (low.startsWith(k2)) return line.slice(k.length + 1).trim();
+        const nk = stripKeyLine(k);
+
+        if (nl.toLowerCase().startsWith((nk + ":").toLowerCase())) {
+          return nl.slice(nk.length + 1).trim();
+        }
+        if (nl.toLowerCase().startsWith((nk + "：").toLowerCase())) {
+          return nl.slice(nk.length + 1).trim();
+        }
+
+        const tabRe = new RegExp(`^${escapeRegExp(nk)}\\s*\\t\\s*(.+)$`, "i");
+        const tm = nl.match(tabRe);
+        if (tm && tm[1]) return tm[1].trim();
+
+        const spRe = new RegExp(`^${escapeRegExp(nk)}\\s+(.+)$`, "i");
+        const sm = nl.match(spRe);
+        if (sm && sm[1]) return sm[1].trim();
       }
     }
-    // key \n value
+
+    // key \n value（支持：■予約番号 下一行是值，可能带缩进）
     for (let i = 0; i < lines.length; i++) {
+      const here = stripKeyLine(lines[i]);
       for (const k of keys) {
-        if (lines[i] === k) {
-          for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
-            if (lines[j]) return lines[j];
+        const nk = stripKeyLine(k);
+        if (here.toLowerCase() === nk.toLowerCase()) {
+          for (let j = i + 1; j < Math.min(lines.length, i + 10); j++) {
+            const v = stripValueLine(lines[j]);
+            if (!v) continue;
+            if (/^(ご予約内容|reservation|details|内容)$/i.test(v)) continue;
+            return v;
           }
         }
       }
     }
+
     return "";
   }
 
@@ -377,15 +439,31 @@
     return String(s || "").replace(/^[■□◆●◼︎]+/g, "").trim();
   }
 
+  function stripKeyLine(s) {
+    return String(s || "")
+      .replace(/^[\s\u3000]*[■□◆●・▶▷►◼︎]+[\s\u3000]*/g, "")
+      .replace(/^[\s\u3000]+/g, "")
+      .trim();
+  }
+
+  function stripValueLine(s) {
+    return String(s || "")
+      .replace(/^[\s\u3000]+/g, "")
+      .replace(/^[■□◆●・▶▷►◼︎\-\*]+\s*/g, "")
+      .trim();
+  }
+
+  function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   function splitPeopleSeat(s) {
     const str = String(s || "").trim();
     if (!str) return { people: "", seat: "" };
 
-    // 1人 / カウンター
     const m = str.match(/(\d{1,2}\s*(?:人|名)?)\s*\/\s*(.+)$/);
     if (m) return { people: m[1].trim(), seat: m[2].trim() };
 
-    // 2 人 / 2名 / 2
     const n = str.match(/(\d{1,2})/);
     return { people: n ? n[1] : str, seat: "" };
   }
@@ -401,8 +479,7 @@
   function parseDateTime(anyText) {
     const s = String(anyText || "");
 
-    // 带年：2026年01月15日(木) 17:00
-    const mj = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日.*?(\d{1,2}:\d{2})/);
+    const mj = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日[^\d]{0,20}(\d{1,2}:\d{2})/);
     if (mj) {
       const yyyy = mj[1];
       const mm = String(mj[2]).padStart(2, "0");
@@ -410,15 +487,22 @@
       return { date: `${yyyy}/${mm}/${dd}`, time: mj[4] };
     }
 
-    // 无年：01月09日(金) 18:00  -> 01/09
-    const mj2 = s.match(/(\d{1,2})月(\d{1,2})日.*?(\d{1,2}:\d{2})/);
+    const mj2 = s.match(/(\d{1,2})月(\d{1,2})日[^\d]{0,20}(\d{1,2}:\d{2})/);
     if (mj2) {
       const mm = String(mj2[1]).padStart(2, "0");
       const dd = String(mj2[2]).padStart(2, "0");
       return { date: `${mm}/${dd}`, time: mj2[3] };
     }
 
-    // 2026-01-15 17:00 / 2026/01/15 17:00
+    const dOnly = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    const tOnly = s.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i) || s.match(/(\d{1,2}:\d{2})/);
+    if (dOnly) {
+      const yyyy = dOnly[1];
+      const mm = String(dOnly[2]).padStart(2, "0");
+      const dd = String(dOnly[3]).padStart(2, "0");
+      return { date: `${yyyy}/${mm}/${dd}`, time: tOnly ? tOnly[1].trim() : "" };
+    }
+
     const m2 = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2}).*?(\d{1,2}:\d{2})/);
     if (m2) {
       const yyyy = m2[1];
@@ -427,7 +511,6 @@
       return { date: `${yyyy}/${mm}/${dd}`, time: m2[4] };
     }
 
-    // 英文日期（Date.parse）
     const time = (s.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i) || s.match(/(\d{1,2}:\d{2})/))?.[1] || "";
     const dp = Date.parse(s);
     if (!Number.isNaN(dp)) {
@@ -438,17 +521,60 @@
       return { date: `${yyyy}/${mm}/${dd}`, time: time || "" };
     }
 
-    return { date: "", time: time || "" };
+    if (tOnly) return { date: "", time: tOnly[1].trim() };
+    return { date: "", time: "" };
   }
 
   function normalizeMoney(s) {
     const t = String(s || "").trim();
     if (!t) return "";
-    // 18,900円 / ¥ 42,500 / ￥42,500 -> 统一显示：¥18,900 或 ¥42,500
     const m1 = t.match(/([¥￥]\s?[\d,]+)/);
     if (m1) return `¥${m1[1].replace(/[¥￥\s]/g, "")}`;
     const m2 = t.match(/(\d[\d,]*)円/);
     if (m2) return `¥${m2[1]}`;
+    return t;
+  }
+
+  function pickMainMoney(text) {
+    const s = String(text || "");
+    const excludeNear = /(お通し|チャージ|サービス料|サービズ料|手数料|席料)/i;
+
+    const matches = [];
+    const re = /([¥￥]\s?[\d,]+)|(\d[\d,]*円)/g;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      const raw = (m[1] || m[2] || "").trim();
+      const idx = m.index;
+      const near = s.slice(Math.max(0, idx - 10), Math.min(s.length, idx + 20));
+      if (excludeNear.test(near)) continue;
+
+      const num = parseInt(raw.replace(/[¥￥円,\s]/g, ""), 10);
+      if (!Number.isNaN(num)) matches.push({ raw, num });
+    }
+
+    if (!matches.length) return "";
+    matches.sort((a, b) => b.num - a.num);
+    const best = matches[0].raw;
+
+    if (/円$/.test(best)) return `¥${best.replace(/[円,\s]/g, "")}`;
+    return `¥${best.replace(/[¥￥\s]/g, "")}`;
+  }
+
+  function jpToCnPhrases(s) {
+    let t = String(s || "").trim();
+    if (!t) return t;
+
+    t = t
+      .replace(/\[禁煙\]/g, "（禁烟）")
+      .replace(/\[喫煙\]/g, "（吸烟）")
+      .replace(/禁煙/g, "禁烟")
+      .replace(/喫煙/g, "吸烟")
+      .replace(/指定なし/g, "不指定")
+      .replace(/初回/g, "首次")
+      .replace(/お会計は当日/g, "当日结账")
+      .replace(/(\d+)\s*時間/g, "$1小时")
+      .replace(/[～~]$/g, "");
+
     return t;
   }
 
@@ -457,21 +583,21 @@
     if (idx < 0) return "";
     let addr = cleanLead(lines[idx]);
     const next = lines[idx + 1] || "";
-    if (next && !/(人数|コース|予約|日時|Time|Date|Seats|Total|Price|金額|電話|Phone|TEL)/i.test(next)) {
+    if (next && !/(人数|コース|予約|日時|Time|Date|Seats|Total|Price|金額|電話|Phone|TEL|用途)/i.test(next)) {
       addr += " " + cleanLead(next);
     }
     return addr.trim();
   }
 
   function guessRestaurant(lines, known) {
-    const bad = /(予約|id|no\.|日時|日付|時間|人数|住所|電話|phone|address|date|time|seats|guests|total|price|コース|course)/i;
+    const bad = /(予約|id|no\.|日時|日付|時間|人数|住所|電話|phone|address|date|time|seats|guests|total|price|コース|course|用途|purpose)/i;
     for (const l of lines) {
       const v = removeLeadingBoxes(cleanLead(l));
       if (!v) continue;
       if (known?.rid && v.includes(known.rid)) continue;
-      if (known?.guest && v.includes(known.guest)) continue;
       if (bad.test(v)) continue;
-      if (v.length >= 2 && v.length <= 30) return v;
+      if (/(〒|都|道|府|県|区|市|町|Chome|City|Japan|Tokyo|Osaka|Kyoto)/i.test(v)) continue;
+      if (v.length >= 2 && v.length <= 40) return v;
     }
     return "";
   }
