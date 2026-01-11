@@ -358,7 +358,7 @@
     note = noteParts.join("；");
 
     // 10) 日文短语轻量翻译（只针对你提到的）
-    seat = jpToCnPhrases(seat);
+    seat = jpToCnPhrases(mapSeat(seat));
     course = jpToCnPhrases(course);
 
     return {
@@ -577,6 +577,22 @@
 
     return t;
   }
+  function mapSeat(seatRaw) {
+  const s = String(seatRaw || "").trim();
+  if (!s) return "";
+
+  const v = s.replace(/\s+/g, " ");
+
+  // 日文关键字
+  if (/テーブル/i.test(v)) return "桌席";
+  if (/カウンター/i.test(v)) return "板前";
+
+  // 英文兜底（安全）
+  if (/\btable\b/i.test(v)) return "桌席";
+  if (/\bcounter\b/i.test(v)) return "板前";
+
+  return s;
+}
 
   function guessAddress(lines) {
     const idx = lines.findIndex(l => /(〒|北海道|東京都|Tokyo|Japan|区|市|町|Chome|City)/i.test(l));
